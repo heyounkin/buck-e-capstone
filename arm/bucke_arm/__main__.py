@@ -1,4 +1,4 @@
-"""Simulated status CLI. Hardware execution is unavailable."""
+"""Read-only status CLI; defaults to simulated readings."""
 
 # argparse reads terminal arguments; asdict and json format the output.
 # sys supplies the error stream and lets us return an exit code to the shell.
@@ -24,16 +24,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # Obtain readings and validate them before printing a successful result.
     try:
         if args.backend == "hardware":
-            # Import only when explicitly selected. The current placeholder
-            # raises an error; it cannot connect to the robot.
+            # Import only when explicitly selected, then open the verified
+            # Pi connection. The adapter has no power or motion commands.
             from .hardware import create_read_only_arm
             arm = create_read_only_arm()
         else:
             arm = FakeArm()
-        telemetry = arm.read_status()
-        # Recheck here so a future adapter cannot silently return bad data.
-        telemetry.validate()
-    except (RuntimeError, ValueError) as error:
+        try:
+            telemetry = arm.read_status()
+            # Validate before reporting success, even with a future adapter.
+            telemetry.validate()
+        finally:
+            # Close on successful reads and on failures. Fake cleanup is a no-op.
+            arm.close()
+    except (RuntimeError, ValueError, OSError) as error:
         # Send failures to stderr (the error stream), with no fake fallback.
         print("Status failed: " + str(error), file=sys.stderr)
         return 1

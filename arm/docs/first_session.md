@@ -1,6 +1,6 @@
 # First arm session
 
-Goal: verify the environment and obtain actual joint angles and tool coordinates. The model is confirmed as myCobot 280 Pi; revision, gripper, mounting, software, and connection settings remain unknown.
+Goal: verify the environment and obtain actual joint angles and tool coordinates. The model is confirmed as myCobot 280 Pi. The user has reported Ubuntu 20.04.4, Python 3.8.10, pymycobot 4.0.6, and pyserial 3.5, and successfully read three telemetry samples over `/dev/ttyAMA0` at 1,000,000 baud. Revision, gripper, mounting, and calibration remain unverified.
 
 ## Inventory
 
@@ -27,7 +27,7 @@ Missing package or device messages are findings to record, not reasons to guess 
 - Check for six finite joint angles and six finite tool-pose values. Record actual units, orientation convention, reference frame, and any tool offset.
 - Record errors and repeated readings; do not silently replace invalid readings with simulated data.
 
-Success is repeatable real telemetry with a documented connection configuration. This starter does not implement that connection yet.
+Success is repeatable real telemetry with a documented connection configuration. The standalone Pi test achieved this; next verify the packaged adapter using the arm README commands.
 
 ## Later sessions
 

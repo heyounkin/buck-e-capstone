@@ -29,10 +29,11 @@ class StatusTests(unittest.TestCase):
         # Capture normal output and errors separately. An unavailable real
         # backend must report failure, not return simulated readings.
         output, error = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
-            self.assertEqual(main(["status", "--backend", "hardware"]), 1)
+        with patch("bucke_arm.hardware.create_read_only_arm", side_effect=RuntimeError("test connection failed")):
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                self.assertEqual(main(["status", "--backend", "hardware"]), 1)
         self.assertEqual(output.getvalue(), "")
-        self.assertIn("not implemented", error.getvalue())
+        self.assertIn("test connection failed", error.getvalue())
 
     def test_bad_telemetry_is_rejected(self):
         # Multiplying a one-element tuple creates six identical values.

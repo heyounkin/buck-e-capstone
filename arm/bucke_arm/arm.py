@@ -52,6 +52,10 @@ class ReadOnlyArm(Protocol):
         # This is an interface declaration, not a working implementation.
         ...
 
+    def close(self) -> None:
+        """Close the connection without issuing motion commands."""
+        ...
+
 
 class FakeArm:
     """Deterministic software fixture, not a physical robot model."""
@@ -67,3 +71,7 @@ class FakeArm:
         # Check the fake readings using the same rules as future real data.
         telemetry.validate()
         return telemetry
+
+    def close(self) -> None:
+        # The fake owns no connection, so cleanup does nothing.
+        pass

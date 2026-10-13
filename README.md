@@ -12,4 +12,4 @@ python -m bucke_arm status
 python -m unittest discover -s tests -v
 ```
 
-Hardware integration is UNVERIFIED ON HARDWARE. The current starter cannot connect to or move the robot. Physical telemetry, motion, calibration, gripper support, pick-and-place, vision, and mobile-base coordination will be developed in later milestones.
+An explicit read-only hardware status adapter now uses the SDK and serial settings from the user's successful Pi telemetry test. The packaged adapter is UNVERIFIED ON HARDWARE until it is run on the Pi. See the arm README for setup and commands. Motion, calibration, gripper support, pick-and-place, vision, and mobile-base coordination remain future milestones.
