@@ -1,0 +1,12 @@
+{
+  "model": "myCobot 280 Pi",
+  "hardware_revision": null,
+  "pi_os": null,
+  "python_version": null,
+  "pymycobot_version": null,
+  "serial_port": null,
+  "baud_rate": null,
+  "gripper_model": null,
+  "mounting_notes": null,
+  "verification_date": null
+}
