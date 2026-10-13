@@ -2,6 +2,8 @@
 
 Goal: verify the environment and obtain actual joint angles and tool coordinates. The model is confirmed as myCobot 280 Pi. The user has reported Ubuntu 20.04.4, Python 3.8.10, pymycobot 4.0.6, and pyserial 3.5, and successfully read three telemetry samples over `/dev/ttyAMA0` at 1,000,000 baud. Revision, gripper, mounting, and calibration remain unverified.
 
+The standalone communication milestone is complete. See the [verification record](pi_verification.md) for evidence. The immediate next task is transferring the repository to the Pi and testing the packaged adapter; GitHub authentication is currently unresolved. The inventory steps below remain useful for rechecking the setup.
+
 ## Inventory
 
 - Record the model label and hardware revision.

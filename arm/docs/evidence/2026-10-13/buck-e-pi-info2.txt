@@ -1,0 +1,7 @@
+Library location: /home/er/.local/lib/python3.8/site-packages/pymycobot/__init__.py
+PI_PORT: /dev/ttyAMA0
+PI_PORT: /dev/ttyAMA0
+PI_BAUD: 1000000
+Constructor: (port, baudrate='115200', timeout=0.1, debug=False, thread_lock=True)
+get_angles (self)
+get_coords (self)

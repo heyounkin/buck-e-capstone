@@ -6,6 +6,8 @@ Development workspace for Buck-E, an indoor mobile manipulation capstone using a
 
 The [arm starter](arm/README.md) runs on a laptop without the robot or third-party packages. It includes a read-only interface, fake telemetry, a simulated status CLI, tests, and a [first-session checklist](arm/docs/first_session.md).
 
+The [Pi verification record](arm/docs/pi_verification.md) documents the confirmed Pi/API configuration and successful standalone telemetry test, with original command outputs and remaining integration work.
+
 ```sh
 cd arm
 python -m bucke_arm status

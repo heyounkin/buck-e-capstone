@@ -1,0 +1,36 @@
+Linux er 5.4.0-1073-raspi #84-Ubuntu SMP PREEMPT Sat Oct 15 11:13:36 UTC 2022 aarch64 aarch64 aarch64 GNU/Linux
+NAME="Ubuntu"
+VERSION="20.04.4 LTS (Focal Fossa)"
+ID=ubuntu
+ID_LIKE=debian
+PRETTY_NAME="Ubuntu 20.04.4 LTS"
+VERSION_ID="20.04"
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+VERSION_CODENAME=focal
+UBUNTU_CODENAME=focal
+Python 3.8.10
+/usr/bin/python3
+Name: pymycobot
+Version: 4.0.6
+Summary: Python API for serial communication of MyCobot.
+Home-page: https://github.com/elephantrobotics/pymycobot
+Author: Elephantrobotics
+Author-email: weiquan.xu@elephantrobotics.com
+License: 
+Location: /home/er/.local/lib/python3.8/site-packages
+Requires: numpy, pyserial
+Required-by: 
+---
+Name: pyserial
+Version: 3.5
+Summary: Python Serial Port Extension
+Home-page: https://github.com/pyserial/pyserial
+Author: Chris Liechti
+Author-email: cliechti@gmx.net
+License: BSD
+Location: /home/er/.local/lib/python3.8/site-packages
+Requires: 
+Required-by: pymycobot

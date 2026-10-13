@@ -2,6 +2,8 @@
 
 Development for the Elephant Robotics myCobot 280 Pi. Status defaults to simulation, with an explicit read-only hardware mode based on the user's successful Pi test. The packaged adapter is UNVERIFIED ON HARDWARE until it is run on the Pi.
 
+See the [Pi verification record](docs/pi_verification.md) for the confirmed environment, API inspection, successful standalone readings, deployment blockers, and remaining unknowns.
+
 ## Run locally
 
 From this directory, use Python 3.8 or newer. No third-party packages are required for simulation or tests.
@@ -50,6 +52,8 @@ The user's standalone test returned three valid samples. This verifies basic com
 - `bucke_arm/hardware.py`: isolated read-only adapter for the tested SDK and connection.
 - `bucke_arm/__main__.py`: status command and explicit backend selection.
 - `config/hardware.example.json`: unknown configuration values to record on the Pi.
+- `config/hardware.observed.json`: confirmed observations and historical telemetry; not executable motion configuration or an adapter input.
+- `docs/pi_verification.md`: verification results and links to preserved command output.
 - `docs/first_session.md`: first hardware session checklist.
 - `tests/test_status.py` and `tests/test_hardware.py`: telemetry, hardware isolation, connection settings, and cleanup checks with mocked hardware.
 

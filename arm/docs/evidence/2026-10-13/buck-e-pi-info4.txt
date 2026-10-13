@@ -1,0 +1,22 @@
+    def __init__(self, port, baudrate="115200", timeout=0.1, debug=False, thread_lock=True):
+        """
+        Args:
+            port     : port string
+            baudrate : baud rate string, default '115200'
+            timeout  : default 0.1
+            debug    : whether show debug info
+        """
+        super(MyCobot280, self).__init__(debug)
+        self.calibration_parameters = calibration_parameters
+        self.thread_lock = thread_lock
+        if thread_lock:
+            self.lock = threading.Lock()
+        import serial
+        self._serial_port = serial.Serial()
+        self._serial_port.port = port
+        self._serial_port.baudrate = baudrate
+        self._serial_port.timeout = timeout
+        self._serial_port.rts = False
+        self._serial_port.open()
+        time.sleep(1.5)  # use to 280 AR
+

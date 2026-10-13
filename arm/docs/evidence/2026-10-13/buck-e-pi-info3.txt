@@ -1,0 +1,6 @@
+ls: cannot access '/dev/ttyUSB*': No such file or directory
+ls: cannot access '/dev/ttyACM*': No such file or directory
+lrwxrwxrwx 1 root root          7 Apr 21  2022 /dev/serial0 -> ttyAMA0
+lrwxrwxrwx 1 root root          5 Apr 21  2022 /dev/serial1 -> ttyS0
+crw-rw---- 1 root dialout 204, 64 Apr 21  2022 /dev/ttyAMA0
+uid=1000(er) gid=1000(er) groups=1000(er),4(adm),5(tty),15(kmem),20(dialout),24(cdrom),27(sudo),30(dip),44(video),46(plugdev),107(input),118(lxd),127(lpadmin),134(sambashare),997(spi),998(i2c),999(gpio),1001(fuse)
