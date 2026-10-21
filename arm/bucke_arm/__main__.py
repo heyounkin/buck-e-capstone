@@ -15,17 +15,22 @@ from .arm import FakeArm
 def main(argv: Optional[Sequence[str]] = None) -> int:
     # argv=None uses the terminal arguments. Tests can pass a list instead.
     # The function returns 0 on success and 1 for a status failure.
+
     parser = argparse.ArgumentParser(description="Buck-E read-only arm status")
     # Only status is supported; this starter has no motion commands.
+
     parser.add_argument("command", choices=("status",))
     # A backend is the source of the data. Default to the laptop fake.
+
     parser.add_argument("--backend", choices=("fake", "hardware"), default="fake")
     args = parser.parse_args(argv)
     # Obtain readings and validate them before printing a successful result.
+
     try:
         if args.backend == "hardware":
             # Import only when explicitly selected, then open the verified
             # Pi connection. The adapter has no power or motion commands.
+
             from .hardware import create_read_only_arm
             arm = create_read_only_arm()
         else:
@@ -39,8 +44,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             arm.close()
     except (RuntimeError, ValueError, OSError) as error:
         # Send failures to stderr (the error stream), with no fake fallback.
+
         print("Status failed: " + str(error), file=sys.stderr)
         return 1
+
     # Convert the dataclass to a dictionary, then print readable JSON.
     print(json.dumps(asdict(telemetry), indent=2))
     return 0
