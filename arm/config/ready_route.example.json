@@ -1,0 +1,9 @@
+{
+  "name": "synthetic-near-ready-example",
+  "description": "Offline demonstration only. Starting ranges and waypoints are synthetic, not measured or physically reviewed. Do not execute on the arm.",
+  "start_min_deg": [-91, -1, -1, -1, 89, -131],
+  "start_max_deg": [-89, 1, 1, 1, 91, -129],
+  "waypoints_deg": [
+    [-90, 0, 0, 0, 90, -132]
+  ]
+}

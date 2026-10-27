@@ -20,13 +20,25 @@ class HardwareTests(unittest.TestCase):
         return client
 
     def test_factory_uses_tested_settings(self):
-        sdk = Mock(spec=["MyCobot280"])
+        sdk = Mock(spec=["MyCobot280", "PI_PORT", "PI_BAUD"])
+        sdk.PI_PORT = "/dev/ttyAMA0"
+        sdk.PI_BAUD = 1000000
         sdk.MyCobot280.return_value = self.client()
         with patch("bucke_arm.hardware.metadata.version", return_value="4.0.6"):
             with patch.dict("sys.modules", {"pymycobot": sdk}):
                 arm = create_read_only_arm()
                 arm.close()
         sdk.MyCobot280.assert_called_once_with("/dev/ttyAMA0", 1000000)
+
+    def test_changed_pi_constants_never_open_connection(self):
+        sdk = Mock(spec=["MyCobot280", "PI_PORT", "PI_BAUD"])
+        sdk.PI_PORT = "/dev/other"
+        sdk.PI_BAUD = 1000000
+        with patch("bucke_arm.hardware.metadata.version", return_value="4.0.6"):
+            with patch.dict("sys.modules", {"pymycobot": sdk}):
+                with self.assertRaisesRegex(RuntimeError, "constants differ"):
+                    create_read_only_arm()
+        sdk.MyCobot280.assert_not_called()
 
     def test_unverified_sdk_never_constructs_client(self):
         sdk = Mock(spec=["MyCobot280"])

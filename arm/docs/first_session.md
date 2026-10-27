@@ -2,7 +2,7 @@
 
 Goal: verify the environment and obtain actual joint angles and tool coordinates. The model is confirmed as myCobot 280 Pi. The user has reported Ubuntu 20.04.4, Python 3.8.10, pymycobot 4.0.6, and pyserial 3.5, and successfully read three telemetry samples over `/dev/ttyAMA0` at 1,000,000 baud. Revision, gripper, mounting, and calibration remain unverified.
 
-The standalone communication milestone is complete. See the [verification record](pi_verification.md) for evidence. The immediate next task is transferring the repository to the Pi and testing the packaged adapter; GitHub authentication is currently unresolved. The inventory steps below remain useful for rechecking the setup.
+The standalone and packaged communication milestones are complete. See the [verification record](pi_verification.md) for evidence. J4 holding and three error-free queries after one error clear were confirmed. The first J1 test had unexpected J4/J5 changes. Following diagnostics, fresh stationary readings, and renewed clearance confirmations, the user authorized and ran one supervised J1 move from 149.15 to 148.15 degrees at speed setting 5. J1 stayed at 149.15 in the displayed readings and the user saw no movement; the helper timed out and requested stop. Next are read-only controller-state checks before another motion plan. The [arm README](../README.md#current-supervised-j1-test) records the helper and abort conditions. GitHub authentication remains unverified; files were transferred over SSH. The inventory steps below remain useful for rechecking the setup.
 
 ## Inventory
 
@@ -29,7 +29,7 @@ Missing package or device messages are findings to record, not reasons to guess 
 - Check for six finite joint angles and six finite tool-pose values. Record actual units, orientation convention, reference frame, and any tool offset.
 - Record errors and repeated readings; do not silently replace invalid readings with simulated data.
 
-Success is repeatable real telemetry with a documented connection configuration. The standalone Pi test achieved this; next verify the packaged adapter using the arm README commands.
+Success is repeatable real telemetry with a documented connection configuration. The standalone Pi test and subsequent packaged adapter check achieved this. The observed J4 limit error was resolved. Diagnostics and current user authorization are recorded separately; they do not establish the cause of the first powered test's unexpected changes.
 
 ## Later sessions
 

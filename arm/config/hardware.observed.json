@@ -3,7 +3,7 @@
   "purpose": "Observed configuration record; not motion configuration or an adapter input",
   "model": "myCobot 280 Pi",
   "hardware_revision": null,
-  "firmware_version": null,
+  "firmware_version": 7.3,
   "pi_os": "Ubuntu 20.04.4 LTS",
   "architecture": "aarch64",
   "kernel_version": "5.4.0-1073-raspi",
@@ -28,7 +28,38 @@
     "orientation_convention_verified": false,
     "approved_motion_target": false
   },
-  "packaged_adapter_test_on_pi": "pending",
+  "packaged_adapter_test_on_pi": "passed; user screenshot, 2026-10-21",
+  "latest_error_observation": {
+    "date": "2026-10-21",
+    "error_information": 4,
+    "joint_angles_deg": [43.06, -14.58, 11.07, 153.8, 79.8, -46.0],
+    "source": "User-provided screenshot; historical readings only",
+    "manual_joint4_recovery": "user confirmed holding after resume-hold",
+    "post_recovery_angles_deg": [43.06, -14.5, 11.16, 119.53, 81.03, -45.7],
+    "errors_after_single_clear": [0, 0, 0],
+    "angles_unchanged_after_clear": true
+  },
+  "authorized_joint1_test": {
+    "starting_joint_angles_deg": [43.06, -14.5, 11.16, 119.53, 81.03, -45.7],
+    "target_joint1_deg": 44.06,
+    "api_speed_setting": 5,
+    "automatic_return": false,
+    "hardware_execution": "failed: J1 unchanged; unexpected J4/J5 changes; stop response 1",
+    "initial_angles_deg": [43.06, -14.5, 11.16, 119.53, 81.12, -45.7],
+    "first_post_command_angles_deg": [43.06, -14.5, 11.16, 120.67, 82.88, -45.7],
+    "cause": "unresolved; no alternate joint-ID mapping established",
+    "local_hardware_cli": "disabled pending read-only diagnosis",
+    "post_stop_read_only_samples": {
+      "joint_angles_deg": [
+        [43.33, -14.5, 11.16, 120.67, 82.8, -45.7],
+        [43.33, -14.5, 11.16, 120.67, 82.88, -45.7],
+        [43.33, -14.5, 11.16, 120.67, 82.8, -45.7]
+      ],
+      "moving": [0, 0, 0],
+      "errors": [0, 0, 0],
+      "installed_send_angle": "matches upstream 4.0.6; forwards provided joint ID"
+    }
+  },
   "pi_github_authentication": "unresolved; clone failed",
   "gripper_model": null,
   "mounting_notes": null,

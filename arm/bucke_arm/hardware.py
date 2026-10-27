@@ -40,10 +40,11 @@ def create_read_only_arm() -> HardwareArm:
     if version != "4.0.6":
         raise RuntimeError("Expected verified pymycobot 4.0.6; found " + version)
     try:
-        from pymycobot import MyCobot280
+        from pymycobot import MyCobot280, PI_PORT, PI_BAUD
     except ImportError as error:
         raise RuntimeError("Cannot import MyCobot280 from pymycobot") from error
 
-    # Explicit settings from the user's successful three-sample Pi test.
-    # Do not use the constructor's different default baud rate.
-    return HardwareArm(MyCobot280("/dev/ttyAMA0", 1000000))
+    # Use the library's Pi constants, after checking the known working values.
+    if PI_PORT != "/dev/ttyAMA0" or PI_BAUD != 1000000:
+        raise RuntimeError("Library Pi constants differ from the verified settings")
+    return HardwareArm(MyCobot280(PI_PORT, PI_BAUD))
