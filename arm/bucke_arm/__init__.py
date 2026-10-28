@@ -1,5 +1,5 @@
-"""Buck-E arm preparation; no hardware initialization on import."""
+"""Buck-E arm implementations; importing does not connect to hardware."""
 
-# Marks bucke_arm as a Python package. Keep startup free of robot side effects.
-# CLI behavior lives in __main__.py; calculations and hardware adapters are
-# imported explicitly by their callers rather than initialized here.
+from .arm import FakeArm, RealArm
+
+__all__ = ["RealArm", "FakeArm"]

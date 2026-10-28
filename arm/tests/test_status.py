@@ -20,8 +20,8 @@ class StatusTests(unittest.TestCase):
         # StringIO collects printed text in memory rather than the terminal.
         output = io.StringIO()
 
-        # Replace the hardware factory with a mock that records any calls.
-        with patch("bucke_arm.hardware.create_read_only_arm") as hardware:
+        # Replace the RealArm constructor with a mock that records any calls.
+        with patch("bucke_arm.__main__.RealArm") as hardware:
             with contextlib.redirect_stdout(output):
                 self.assertEqual(main(["status"]), 0)
 
@@ -35,7 +35,7 @@ class StatusTests(unittest.TestCase):
         # Capture normal output and errors separately. An unavailable real
         # backend must report failure, not return simulated readings.
         output, error = io.StringIO(), io.StringIO()
-        with patch("bucke_arm.hardware.create_read_only_arm", side_effect=RuntimeError("test connection failed")):
+        with patch("bucke_arm.__main__.RealArm", side_effect=RuntimeError("test connection failed")):
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
                 self.assertEqual(main(["status", "--backend", "hardware"]), 1)
 
@@ -68,7 +68,6 @@ class StatusTests(unittest.TestCase):
         code = (
             "import sys; from bucke_arm.__main__ import main; "
             "assert main(['status']) == 0; "
-            "assert 'bucke_arm.hardware' not in sys.modules; "
             "assert not any(n == 'pymycobot' or n.startswith('pymycobot.') "
             "for n in sys.modules)"
         )

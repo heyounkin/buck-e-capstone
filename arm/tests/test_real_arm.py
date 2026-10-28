@@ -7,7 +7,7 @@ import json
 import unittest
 from unittest.mock import Mock, patch
 
-from bucke_arm.hardware import HardwareArm, create_read_only_arm
+from bucke_arm.arm import RealArm
 from bucke_arm.__main__ import main
 
 
@@ -19,16 +19,16 @@ class HardwareTests(unittest.TestCase):
         client.get_coords.return_value = [2.0] * 6
         return client
 
-    def test_factory_uses_tested_settings(self):
+    def test_constructor_uses_tested_settings(self):
         # Replace the imported SDK and installed-version lookup before creating
         # the adapter, so construction cannot open a physical serial port.
         sdk = Mock(spec=["MyCobot280", "PI_PORT", "PI_BAUD"])
         sdk.PI_PORT = "/dev/ttyAMA0"
         sdk.PI_BAUD = 1000000
         sdk.MyCobot280.return_value = self.client()
-        with patch("bucke_arm.hardware.metadata.version", return_value="4.0.6"):
+        with patch("bucke_arm.arm.metadata.version", return_value="4.0.6"):
             with patch.dict("sys.modules", {"pymycobot": sdk}):
-                arm = create_read_only_arm()
+                arm = RealArm()
                 arm.close()
 
         sdk.MyCobot280.assert_called_once_with("/dev/ttyAMA0", 1000000)
@@ -38,35 +38,35 @@ class HardwareTests(unittest.TestCase):
         sdk = Mock(spec=["MyCobot280", "PI_PORT", "PI_BAUD"])
         sdk.PI_PORT = "/dev/other"
         sdk.PI_BAUD = 1000000
-        with patch("bucke_arm.hardware.metadata.version", return_value="4.0.6"):
+        with patch("bucke_arm.arm.metadata.version", return_value="4.0.6"):
             with patch.dict("sys.modules", {"pymycobot": sdk}):
                 with self.assertRaisesRegex(RuntimeError, "constants differ"):
-                    create_read_only_arm()
+                    RealArm()
 
         sdk.MyCobot280.assert_not_called()
 
     def test_unverified_sdk_never_constructs_client(self):
         # Unknown SDK versions must fail without trying a connection anyway.
         sdk = Mock(spec=["MyCobot280"])
-        with patch("bucke_arm.hardware.metadata.version", return_value="unknown"):
+        with patch("bucke_arm.arm.metadata.version", return_value="unknown"):
             with patch.dict("sys.modules", {"pymycobot": sdk}):
                 with self.assertRaisesRegex(RuntimeError, "Expected verified"):
-                    create_read_only_arm()
+                    RealArm()
 
         sdk.MyCobot280.assert_not_called()
 
     def test_missing_sdk_has_useful_error(self):
         # Translate package-discovery failure into the adapter's readable error.
-        with patch("bucke_arm.hardware.metadata.version", side_effect=metadata.PackageNotFoundError):
+        with patch("bucke_arm.arm.metadata.version", side_effect=metadata.PackageNotFoundError):
             with self.assertRaisesRegex(RuntimeError, "missing"):
-                create_read_only_arm()
+                RealArm()
 
     def test_cli_reports_hardware_and_closes_connection(self):
         # Exercise the hardware CLI branch with a fake client, checking source
         # labeling, permitted reads, and connection cleanup together.
         client = self.client()
         output = io.StringIO()
-        with patch("bucke_arm.hardware.create_read_only_arm", return_value=HardwareArm(client)):
+        with patch("bucke_arm.__main__.RealArm", return_value=RealArm(client)):
             with contextlib.redirect_stdout(output):
                 self.assertEqual(main(["status", "--backend", "hardware"]), 0)
 
@@ -87,7 +87,7 @@ class HardwareTests(unittest.TestCase):
                     client.get_angles.return_value = failure
 
                 output, error = io.StringIO(), io.StringIO()
-                with patch("bucke_arm.hardware.create_read_only_arm", return_value=HardwareArm(client)):
+                with patch("bucke_arm.__main__.RealArm", return_value=RealArm(client)):
                     with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
                         self.assertEqual(main(["status", "--backend", "hardware"]), 1)
 

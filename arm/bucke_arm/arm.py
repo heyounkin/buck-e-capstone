@@ -1,87 +1,225 @@
-"""Read-only interface and explicitly simulated telemetry."""
+"""Real and simulated Buck-E arms with the same application methods."""
 
 from dataclasses import dataclass
+from importlib import metadata
 import math
-from typing import Protocol, Tuple
+import time
+from typing import Tuple
+
+STANDBY_ANGLES = (0, 0, 90, 90, 90, -135)
+READY_ANGLES = (90, 0, 0, 0, 90, -135)
+POSE_TOLERANCE = 3.0
+POSE_SPEED = 5
+MOVE_TIMEOUT = 120
+SETTLE_TIMEOUT = 5
+SPEC_LIMITS = ((-168, 168), (-135, 135), (-150, 150),
+               (-145, 145), (-165, 165), (-180, 180))
 
 
-# A dataclass generates the constructor for a simple data container.
-# frozen=True prevents assigning new field values after it is created.
+def _pose(values):
+    if (not isinstance(values, (list, tuple)) or len(values) != 6
+            or any(type(v) not in (int, float) or not math.isfinite(v) for v in values)):
+        raise ValueError("Expected six finite numeric angles/coordinates")
+    return tuple(values)
+
+
+def _matches(current, target):
+    return all(abs(a - b) <= POSE_TOLERANCE for a, b in zip(current, target))
+
+
+def _speed(value):
+    if type(value) is not int or not 1 <= value <= 100:
+        raise ValueError("Speed must be an integer from 1 to 100")
+
+
+def _joint_target(joint, target):
+    if type(joint) is not int or not 1 <= joint <= 6:
+        raise ValueError("Joint must be 1 through 6")
+    if type(target) not in (int, float) or not math.isfinite(target):
+        raise ValueError("Target must be a finite number")
+    low, high = SPEC_LIMITS[joint - 1]
+    if not low <= target <= high:
+        raise ValueError("J%d target outside joint limits" % joint)
+
+
 @dataclass(frozen=True)
 class Telemetry:
-    # This record intentionally contains only angles and tool coordinates.
-    # It does not establish movement/error status for a ready-pose execution.
-    # Type hints describe the expected data; validate() checks it at runtime.
-    # source distinguishes test data from future physical robot readings.
     source: str
-
-    # Six angles, ordered by joint number, expressed in degrees.
     joint_angles_deg: Tuple[float, ...]
-
-    # Intended format: x, y, z in mm, followed by three orientation values
-    # in degrees. The real device's frame and orientation convention still
-    # need verification. Tuple[float, ...] means a tuple of numeric values;
-    # its length is checked below rather than enforced by the type hint.
     tool_pose_mm_deg: Tuple[float, ...]
 
-    def validate(self) -> None:
-        # Reject data whose origin is not explicitly identified.
+    def validate(self):
         if self.source not in ("simulated", "hardware"):
             raise ValueError("Telemetry source must be simulated or hardware")
-
-        # Apply the same shape and number checks to both sets of readings.
-        for name, values in (
-            ("joint angles", self.joint_angles_deg),
-            ("tool pose", self.tool_pose_mm_deg),
-        ):
-            if len(values) != 6:
-                raise ValueError("Expected six values for " + name)
-
-            # any() is true if even one value fails these checks.
-            # Reject booleans explicitly: Python treats bool as a kind of int.
-            # isfinite() rejects NaN (not a number) and positive/negative infinity.
-            if any(
-                isinstance(value, bool)
-                or not isinstance(value, (int, float))
-                or not math.isfinite(value)
-                for value in values
-            ):
-                raise ValueError("Expected finite numeric values for " + name)
+        _pose(self.joint_angles_deg)
+        _pose(self.tool_pose_mm_deg)
 
 
-# A Protocol describes a common interface for type checkers. A fake or real
-# implementation can satisfy it by providing read_status(); inheritance is
-# not required. It does not enforce hardware safety at runtime.
-class ReadOnlyArm(Protocol):
-    def read_status(self) -> Telemetry:
-        """Return telemetry without issuing motion commands."""
+class RealArm:
+    """Connect to the Pi SDK, or accept an injected SDK client for tests."""
 
-        # This is an interface declaration, not a working implementation.
-        ...
+    def __init__(self, client=None):
+        if client is None:
+            try:
+                version = metadata.version("pymycobot")
+            except metadata.PackageNotFoundError as error:
+                raise RuntimeError("pymycobot is missing from this Python environment") from error
+            if version != "4.0.6":
+                raise RuntimeError("Expected verified pymycobot 4.0.6; found " + version)
+            from pymycobot import MyCobot280, PI_PORT, PI_BAUD
+            if PI_PORT != "/dev/ttyAMA0" or PI_BAUD != 1000000:
+                raise RuntimeError("Library Pi constants differ from the verified settings")
+            client = MyCobot280(PI_PORT, PI_BAUD)
+        self._client = client
 
-    def close(self) -> None:
-        """Close the connection without issuing motion commands."""
+    def get_angles(self):
+        return _pose(self._client.get_angles())
 
-        ...
-
-
-class FakeArm:
-    """Deterministic software fixture, not a physical robot model."""
-
-    def read_status(self) -> Telemetry:
-        # This fixture is stateless: it cannot simulate commanded servo movement.
-        # These fixed values let us develop on a laptop. They are not safe
-        # motion targets, calibration, measured readings, or a physics model.
-        telemetry = Telemetry(
-            source="simulated",
-            joint_angles_deg=(10.0, -20.0, 30.0, -40.0, 50.0, -60.0),
-            tool_pose_mm_deg=(100.0, 20.0, 150.0, 0.0, 0.0, 0.0),
-        )
-
-        # Check the fake readings using the same rules as future real data.
+    def read_status(self):
+        telemetry = Telemetry("hardware", self.get_angles(), _pose(self._client.get_coords()))
         telemetry.validate()
         return telemetry
 
-    def close(self) -> None:
-        # The fake owns no connection, so cleanup does nothing.
+    def _motion_status(self):
+        moving = self._client.is_moving()
+        error = self._client.get_error_information()
+        if type(moving) is not int or moving not in (0, 1) or type(error) is not int or error != 0:
+            raise RuntimeError("Invalid motion status or controller fault: moving=%r, error=%r" % (moving, error))
+        return moving
+
+    def _require_stationary(self):
+        if self._motion_status() != 0:
+            raise RuntimeError("Arm must be stationary before a command")
+
+    def _check_target(self, joint, target):
+        _joint_target(joint, target)
+        low, high = SPEC_LIMITS[joint - 1]
+        try:
+            robot_low = self._client.get_joint_min_angle(joint)
+            robot_high = self._client.get_joint_max_angle(joint)
+        except (AttributeError, OSError):
+            return  # Retain the manual controller's documented-limit fallback.
+        if (type(robot_low) in (int, float) and type(robot_high) in (int, float)
+                and math.isfinite(robot_low) and math.isfinite(robot_high) and robot_low < robot_high):
+            low, high = max(low, robot_low), min(high, robot_high)
+        if not low <= target <= high:
+            raise ValueError("J%d target outside controller limits" % joint)
+
+    def move_joint(self, joint, target, speed=10):
+        _speed(speed)
+        self._check_target(joint, target)
+        self._require_stationary()
+        self._client.send_angle(joint, target, speed)
+
+    def open_gripper(self, speed=20):
+        _speed(speed)
+        self._require_stationary()
+        self._client.set_gripper_state(0, speed)
+
+    def close_gripper(self, speed=20):
+        _speed(speed)
+        self._require_stationary()
+        self._client.set_gripper_state(1, speed)
+
+    def move_to_ready(self):
+        return self._move_between(STANDBY_ANGLES, READY_ANGLES)
+
+    def move_to_standby(self):
+        return self._move_between(READY_ANGLES, STANDBY_ANGLES)
+
+    def _move_between(self, start, target):
+        self._require_stationary()
+        current = self.get_angles()
+        if _matches(current, target):
+            return True
+        if not _matches(current, start):
+            raise RuntimeError("Arm is not at the required starting pose: " + repr(start))
+        for joint, angle in enumerate(target, 1):
+            self._check_target(joint, angle)
+        # Recheck after the limit queries, immediately before transmission.
+        self._require_stationary()
+        if not _matches(self.get_angles(), start):
+            raise RuntimeError("Starting pose changed before movement")
+        try:
+            # SDK 4.0.6 returns 1 even on timeout, so verify telemetry afterward.
+            # The blocking SDK call pauses our own fault polling until it returns.
+            self._client.sync_send_angles(list(target), POSE_SPEED, timeout=MOVE_TIMEOUT)
+            self._wait_for_target(target)
+        except BaseException:
+            try:
+                self.stop()
+            except Exception:
+                pass  # Preserve the original failure if stop also fails.
+            raise
+        return True
+
+    def _wait_for_target(self, target):
+        started = time.monotonic()
+        settled = 0
+        while time.monotonic() - started < SETTLE_TIMEOUT:
+            moving = self._motion_status()
+            current = self.get_angles()
+            settled = settled + 1 if moving == 0 and _matches(current, target) else 0
+            if settled >= 3:
+                return
+            time.sleep(0.2)
+        raise RuntimeError("Target not confirmed within pose tolerance")
+
+    def stop(self):
+        try:
+            self._client.stop()
+        finally:
+            self._client.gripper_stop()
+
+    def close(self):
+        self._client._serial_port.close()
+
+
+class FakeArm:
+    """Immediate state changes for laptop development; no physics or kinematics."""
+
+    def __init__(self, angles=STANDBY_ANGLES):
+        self._angles = _pose(angles)
+        self.gripper_open = False
+
+    def get_angles(self):
+        return self._angles
+
+    def read_status(self):
+        # Tool coordinates are fixed sample data, not calculated from the angles.
+        return Telemetry("simulated", self._angles, (100.0, 20.0, 150.0, 0.0, 0.0, 0.0))
+
+    def move_joint(self, joint, target, speed=10):
+        _speed(speed)
+        _joint_target(joint, target)
+        updated = list(self._angles)
+        updated[joint - 1] = target
+        self._angles = tuple(updated)
+
+    def open_gripper(self, speed=20):
+        _speed(speed)
+        self.gripper_open = True
+
+    def close_gripper(self, speed=20):
+        _speed(speed)
+        self.gripper_open = False
+
+    def move_to_ready(self):
+        return self._move_between(STANDBY_ANGLES, READY_ANGLES)
+
+    def move_to_standby(self):
+        return self._move_between(READY_ANGLES, STANDBY_ANGLES)
+
+    def _move_between(self, start, target):
+        if _matches(self._angles, target):
+            return True
+        if not _matches(self._angles, start):
+            raise RuntimeError("Arm is not at the required starting pose: " + repr(start))
+        self._angles = target
+        return True
+
+    def stop(self):
+        pass
+
+    def close(self):
         pass

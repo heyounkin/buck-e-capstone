@@ -1,30 +1,34 @@
 
-from pymycobot import MyCobot280
+import argparse
 import math
 import time
 
-# myCobot 280 Pi
-mc = MyCobot280("/dev/ttyAMA0", 1000000)
+# Open the hardware connection only when running main().
+mc = None
 
 SPEED = 10
 GRIPPER_SPEED = 20
 POSE_TOLERANCE = 3.0
-MOVE_TIMEOUT = 45
+SETTLED_SAMPLES = 3
+SYNC_SPEED = 5
+SYNC_TIMEOUT = 120
+POST_SYNC_TIMEOUT = 5
 
 # Buck-E saved configurations (J1-J6)
-STANDBY_ANGLES = [0, 0, 90, 90, 90, -130]
-READY_ANGLES = [0, 0, 0, 0, 90, -130]
+STANDBY_ANGLES = [0, 0, 90, 90, 90, -135]
+READY_ANGLES = [90, 0, 0, 0, 90, -135]
 
-# Set True ONLY after physically validating
-# the direct standby-to-ready motion.
-READY_PATH_VERIFIED = False
+# User confirmed both synchronous transitions work safely on October 28, 2026.
+# These flags record that report, not an independent hardware measurement.
+READY_PATH_VERIFIED = True
+STANDBY_PATH_VERIFIED = True
 
 SPEC_LIMITS = {
     1: (-168, 168),
     2: (-135, 135),
     3: (-150, 150),
     4: (-145, 145),
-    5: (-155, 160),
+    5: (-165, 165),
     6: (-180, 180),
 }
 
@@ -50,8 +54,8 @@ def get_allowed_range(joint):
         robot_high = mc.get_joint_max_angle(joint)
 
         if (
-            isinstance(robot_low, (int, float))
-            and isinstance(robot_high, (int, float))
+            type(robot_low) in (int, float)
+            and type(robot_high) in (int, float)
             and math.isfinite(robot_low)
             and math.isfinite(robot_high)
             and robot_low < robot_high
@@ -74,7 +78,7 @@ def arm_ready():
     moving = mc.is_moving()
     error = mc.get_error_information()
 
-    if moving != 0 or error != 0:
+    if type(moving) is not int or moving != 0 or type(error) is not int or error != 0:
         print(f"Movement blocked: moving={moving}, error={error}")
         return False
 
@@ -82,7 +86,7 @@ def arm_ready():
 
 
 def matches_pose(current, target):
-    return valid_angles(current) and all(
+    return valid_angles(current) and valid_angles(target) and all(
         abs(a - b) <= POSE_TOLERANCE
         for a, b in zip(current, target)
     )
@@ -95,16 +99,18 @@ def stop_arm():
         print(f"Software stop failed: {exc}")
 
 
-def wait_for_target(target):
+def wait_for_target(target, timeout=POST_SYNC_TIMEOUT):
     """Verify movement completion and monitor controller faults."""
     start = time.monotonic()
+    settled = 0
 
-    while time.monotonic() - start < MOVE_TIMEOUT:
+    while time.monotonic() - start < timeout:
         error = mc.get_error_information()
         moving = mc.is_moving()
         current = mc.get_angles()
 
-        if error != 0 or moving not in (0, 1):
+        if (type(error) is not int or error != 0
+                or type(moving) is not int or moving not in (0, 1)):
             print(f"Motion fault: moving={moving}, error={error}")
             stop_arm()
             return False
@@ -114,8 +120,9 @@ def wait_for_target(target):
             stop_arm()
             return False
 
-        if moving == 0 and matches_pose(current, target):
-            print("Target reached.")
+        settled = settled + 1 if moving == 0 and matches_pose(current, target) else 0
+        if settled >= SETTLED_SAMPLES:
+            print("Target reached within", POSE_TOLERANCE, "degrees per joint.")
             print("Final angles:", current)
             return True
 
@@ -126,178 +133,204 @@ def wait_for_target(target):
     return False
 
 
-def move_to_ready():
-    print("\n--- READY TRANSITION ---")
-
+def move_to_pose(name, start_name, start_pose, target_pose, path_verified):
+    """Run one named transition with local confirmation and no application retry."""
+    print(f"\n--- {name} TRANSITION ---")
     if not arm_ready():
-        return
+        return False
 
     current = mc.get_angles()
-
     if not valid_angles(current):
         print("Unable to read current angles.")
-        return
+        return False
 
     print("Current angles:", current)
-    print("Required standby:", STANDBY_ANGLES)
+    print(f"Required {start_name.lower()}:", start_pose)
+    print(f"Target {name.lower()} pose:", target_pose)
+    if matches_pose(current, target_pose):
+        print(f"Already within {name.lower()}-pose tolerance. No movement commanded.")
+        return True
 
-    # Only allow transition from standby
-    if not matches_pose(current, STANDBY_ANGLES):
-        print("\nBLOCKED: Arm is not in standby position.")
+    if not matches_pose(current, start_pose):
+        print(f"BLOCKED: Arm is not in {start_name.lower()} position.")
+        for joint, (angle, expected) in enumerate(zip(current, start_pose), 1):
+            print(f"J{joint}: deviation {angle - expected:+.2f} degrees")
+        return False
 
-        for i in range(6):
-            difference = current[i] - STANDBY_ANGLES[i]
-            print(f"J{i+1}: deviation {difference:+.2f} degrees")
-
-        print("Move to standby manually first.")
-        return
-
-    print("\nStandby verified.")
-
-    print("Target ready pose:", READY_ANGLES)
-
-    # Validate target joint limits
-    for joint, target in enumerate(READY_ANGLES, start=1):
+    for joint, target in enumerate(target_pose, start=1):
         low, high = get_allowed_range(joint)
-
         if not low <= target <= high:
             print(f"J{joint} target violates joint limits.")
-            return
+            return False
 
-    if not READY_PATH_VERIFIED:
-        print("\nREADY MOVEMENT DISABLED.")
-        print("Direct transition path has not been verified.")
+    if not path_verified:
+        print(f"{name} MOVEMENT DISABLED.")
+        print(f"Direct {start_name.lower()}-to-{name.lower()} path has not been verified.")
         print("No movement commanded.")
-        return
+        return False
 
-    print("\nWARNING: This moves multiple joints.")
-    print("Verify the entire route is clear.")
-
-    confirm = input("Type READY to execute: ").strip()
-
-    if confirm != "READY":
+    print("This moves multiple joints. Verify the entire route is clear.")
+    print(f"Synchronous SDK move: speed {SYNC_SPEED}, timeout {SYNC_TIMEOUT} seconds.")
+    if input(f"Type {name} to execute: ").strip() != name:
         print("Movement cancelled.")
-        return
+        return False
 
-    # Recheck immediately before issuing the command
     if not arm_ready():
-        return
-
+        return False
     latest = mc.get_angles()
-
-    if not matches_pose(latest, STANDBY_ANGLES):
+    if not matches_pose(latest, start_pose):
         print("Starting pose changed. Movement cancelled.")
-        return
+        return False
 
-    print("\nMoving to ready position...")
-    mc.send_angles(READY_ANGLES, SPEED)
+    print(f"Moving to {name.lower()} position...")
+    try:
+        # SDK 4.0.6 returns 1 even after its timeout. Verify actual telemetry
+        # after it returns; the SDK blocks our own polling during this call.
+        mc.sync_send_angles(target_pose, SYNC_SPEED, timeout=SYNC_TIMEOUT)
+        reached = wait_for_target(target_pose, timeout=POST_SYNC_TIMEOUT)
+    except BaseException:
+        # A failed SDK call may still have transmitted the command.
+        stop_arm()
+        raise
 
-    if wait_for_target(READY_ANGLES):
-        print("READY POSITION CONFIRMED.")
+    if reached:
+        print(f"{name} POSITION CONFIRMED.")
     else:
-        print("Ready transition failed. Inspect robot.")
+        print(f"{name.title()} transition failed. Inspect robot.")
+    return reached
 
 
-print("\n=== BUCK-E WORKSPACE CONTROLLER ===")
-print("1-6 : Move individual joint")
-print("O   : Open gripper")
-print("C   : Close gripper")
-print("R   : Move from standby to ready")
-print("Anything else : Quit\n")
+def move_to_ready():
+    return move_to_pose("READY", "STANDBY", STANDBY_ANGLES, READY_ANGLES,
+                        READY_PATH_VERIFIED)
 
-try:
-    while True:
-        choice = input(
-            "Select (1-6 / O / C / R): "
-        ).strip().upper()
 
-        # --- READY POSITION ---
-        if choice == "R":
-            move_to_ready()
-            continue
+def move_to_standby():
+    return move_to_pose("STANDBY", "READY", READY_ANGLES, STANDBY_ANGLES,
+                        STANDBY_PATH_VERIFIED)
 
-        # --- GRIPPER CONTROL ---
-        if choice in ("O", "C"):
+
+def main(argv=None):
+    """Connect on the Pi and run the interactive controller."""
+    global mc
+    parser = argparse.ArgumentParser(description="Buck-E interactive hardware controller")
+    parser.parse_args(argv)
+    from pymycobot import MyCobot280
+
+    mc = MyCobot280("/dev/ttyAMA0", 1000000)
+    print("\n=== BUCK-E WORKSPACE CONTROLLER ===")
+    print("1-6 : Move individual joint")
+    print("O   : Open gripper")
+    print("C   : Close gripper")
+    print("R   : Move from standby to ready")
+    print("S   : Move from ready to standby")
+    print("Anything else : Quit\n")
+    print("R/S: synchronous all-joint movement, speed 5, one confirmation per pose.")
+
+    try:
+        while True:
+            choice = input(
+                "Select (1-6 / O / C / R / S): "
+            ).strip().upper()
+
+            # --- READY POSITION ---
+            if choice == "R":
+                move_to_ready()
+                continue
+
+            if choice == "S":
+                move_to_standby()
+                continue
+
+            # --- GRIPPER CONTROL ---
+            if choice in ("O", "C"):
+                if not arm_ready():
+                    print("Check arm status before retrying.")
+                    continue
+
+                if choice == "O":
+                    print("Opening gripper...")
+                    mc.set_gripper_state(0, GRIPPER_SPEED)
+                else:
+                    print("Closing gripper...")
+                    mc.set_gripper_state(1, GRIPPER_SPEED)
+
+                print("Gripper command sent.\n")
+                continue
+
+            # --- EXIT ---
+            if choice not in ("1", "2", "3", "4", "5", "6"):
+                print("Exiting controller.")
+                break
+
+            # --- JOINT CONTROL ---
+            joint = int(choice)
+            current = mc.get_angles()
+
+            if not valid_angles(current):
+                print("Unable to read joint angles. Stopping.")
+                break
+
+            current_angle = current[joint - 1]
+            spec_low, spec_high = SPEC_LIMITS[joint]
+
+            print(f"\n--- JOINT {joint} ---")
+            print(f"Current angle: {current_angle:.2f} degrees")
+            print(f"API range: {spec_low} to {spec_high} degrees")
+
+            low, high = get_allowed_range(joint)
+
+            if low >= high:
+                print("Invalid joint limits. Stopping.")
+                break
+
+            print(f"Allowed target range: {low:.1f} to {high:.1f}")
+
+            try:
+                target = float(input("Desired angle: "))
+            except ValueError:
+                print("Invalid angle. Try again.")
+                continue
+
+            if not math.isfinite(target) or not low <= target <= high:
+                print("Target outside allowed range or invalid.")
+                continue
+
             if not arm_ready():
                 print("Check arm status before retrying.")
                 continue
 
-            if choice == "O":
-                print("Opening gripper...")
-                mc.set_gripper_state(0, GRIPPER_SPEED)
-            else:
-                print("Closing gripper...")
-                mc.set_gripper_state(1, GRIPPER_SPEED)
+            change = target - current_angle
 
-            print("Gripper command sent.\n")
-            continue
+            print(f"\nJ{joint}: {current_angle:.2f} -> {target:.2f}")
+            print(f"Angle change: {change:+.2f} degrees")
 
-        # --- EXIT ---
-        if choice not in ("1", "2", "3", "4", "5", "6"):
-            print("Exiting controller.")
-            break
+            confirm = input("Type MOVE to execute: ")
 
-        # --- JOINT CONTROL ---
-        joint = int(choice)
-        current = mc.get_angles()
+            if confirm.strip() != "MOVE":
+                print("Movement cancelled.")
+                continue
 
-        if not valid_angles(current):
-            print("Unable to read joint angles. Stopping.")
-            break
+            # Recheck status before motion
+            if not arm_ready():
+                continue
 
-        current_angle = current[joint - 1]
-        spec_low, spec_high = SPEC_LIMITS[joint]
+            mc.send_angle(joint, target, SPEED)
+            print("Command sent. Verify motion is complete.\n")
 
-        print(f"\n--- JOINT {joint} ---")
-        print(f"Current angle: {current_angle:.2f} degrees")
-        print(f"API range: {spec_low} to {spec_high} degrees")
-
-        low, high = get_allowed_range(joint)
-
-        if low >= high:
-            print("Invalid joint limits. Stopping.")
-            break
-
-        print(f"Allowed target range: {low:.1f} to {high:.1f}")
-
+    except KeyboardInterrupt:
+        print("\nInterrupted. Requesting stop.")
+        stop_arm()
         try:
-            target = float(input("Desired angle: "))
-        except ValueError:
-            print("Invalid angle. Try again.")
-            continue
+            mc.gripper_stop()
+        except Exception as exc:
+            print(f"Gripper stop failed: {exc}")
 
-        if not math.isfinite(target) or not low <= target <= high:
-            print("Target outside allowed range or invalid.")
-            continue
+    finally:
+        mc._serial_port.close()
 
-        if not arm_ready():
-            print("Check arm status before retrying.")
-            continue
+    print("Controller closed.")
 
-        change = target - current_angle
 
-        print(f"\nJ{joint}: {current_angle:.2f} -> {target:.2f}")
-        print(f"Angle change: {change:+.2f} degrees")
-
-        confirm = input("Type MOVE to execute: ")
-
-        if confirm.strip() != "MOVE":
-            print("Movement cancelled.")
-            continue
-
-        # Recheck status before motion
-        if not arm_ready():
-            continue
-
-        mc.send_angle(joint, target, SPEED)
-        print("Command sent. Verify motion is complete.\n")
-
-except KeyboardInterrupt:
-    print("\nInterrupted. Requesting stop.")
-    stop_arm()
-    try:
-        mc.gripper_stop()
-    except Exception as exc:
-        print(f"Gripper stop failed: {exc}")
-
-print("Controller closed.")
+if __name__ == "__main__":
+    main()

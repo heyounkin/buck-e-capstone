@@ -7,9 +7,8 @@ from typing import Optional, Sequence, Tuple
 from .ready_config import JointLimits, ReadyRoute, angles, load_limits
 
 
-# User-corrected ready target, in J1-J6 order (October 21, 2026).
-# This is a joint target, not a reviewed route from an arbitrary starting pose.
-READY_ANGLES_DEG = (-90.0, 0.0, 0.0, 0.0, 90.0, -135.0)
+# Share the active ready pose with both arm implementations.
+from .arm import READY_ANGLES as READY_ANGLES_DEG
 
 
 @dataclass(frozen=True)

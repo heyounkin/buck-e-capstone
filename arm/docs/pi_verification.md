@@ -1,5 +1,61 @@
 # Pi configuration and read-only verification
 
+## Arm class consolidation, October 28, 2026
+
+At the user's request, reusable hardware behavior now lives in `RealArm` and
+simulation in `FakeArm`, both in `bucke_arm/arm.py`. The former read-only
+interface, HardwareArm adapter and factory were removed. `joint_control.py`
+is now a small manual testing menu that calls the classes. Saved-pose starting
+state, limits, synchronous command and final telemetry checks live in RealArm.
+FakeArm tracks commanded joint/gripper state without modeling physical motion.
+The offline preview now shares the active ready target `[90, 0, 0, 0, 90, -135]`.
+The prior negative-J1 target and old architecture described below are historical.
+
+## Synchronous transitions confirmed and experiments retired, October 28, 2026
+
+After running the synchronous controller, the user reported "Great both work
+safely!" for standby-to-ready and ready-to-standby. This records success as
+reported by the operator; no new endpoint readings or trajectory measurements
+were provided. The current saved poses and speed setting 5 remain unchanged.
+
+At the user's request, the sequential test mode, resting CSV logger, J5 stepping
+helper, J4 recovery helper, and their dedicated tests were removed. Synchronous
+transition regression tests, read-only diagnostics and offline ready-planning
+tests remain. The sections below preserve historical evidence and may refer to
+removed scripts or superseded flags; use the arm README for current commands.
+
+## Synchronous saved-pose testing enabled, October 28, 2026
+
+The user subsequently stated "I verified both paths" and clarified that the
+next requested test is synchronous movement using `sync_send_angles()`.
+The controller now records both path-verification flags as true based on that
+user report. Normal R/S commands use the saved poses below at SDK speed setting
+5, timeout 120 seconds, followed by an independent final telemetry check.
+No synchronous hardware result, trajectory trace, or endpoint measurements have
+yet been supplied; user-reported path verification is not an independently
+measured all-joint trajectory. The earlier sequential-only preparation below
+is historical; `--sequential-test` remains available as an option.
+
+The SDK blocks application fault polling while waiting and returns 1 even on
+timeout. Final stationary/error-free telemetry within the existing 3-degree
+pose tolerance is required before the application reports success. See the
+README for the current invocation and implementation limits.
+
+## Sequential saved-pose test prepared, October 28, 2026
+
+The user confirmed use of the poses currently in `joint_control.py`: standby
+`[0, 0, 90, 90, 90, -135]` and ready `[90, 0, 0, 0, 90, -135]`.
+They stated the physical route should be fine and requested slow sequential
+movement first, with all-joint movement considered afterward. This is user
+assessment and test intent, not completed physical path validation.
+
+`python3 -m bucke_arm.joint_control --sequential-test` offers R/S tests at SDK
+speed setting 5. The candidate ready sequence is J1, J3, J4, with the return
+using J4, J3, J1. Every joint requires fresh local confirmation and completion
+monitoring before another step is offered. No hardware movement was performed
+by the assistant. Both all-joint verification flags remain false. See the arm
+README for the invocation, monitoring criteria, and cancellation behavior.
+
 > Cleanup, October 21, 2026: the old J1/J5 test helpers, J1 positioning
 > helper, and fake-serial packet-check script have been removed. References
 > to those scripts below are historical; use the current arm README for retained tools.

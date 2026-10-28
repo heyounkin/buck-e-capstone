@@ -9,7 +9,7 @@ import sys
 from typing import Optional, Sequence
 
 # The leading dot imports from this same package. No robot SDK is loaded.
-from .arm import FakeArm
+from .arm import FakeArm, RealArm
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -24,7 +24,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     # A backend is the source of the data. Default to the laptop fake.
 
-    status.add_argument("--backend", choices=("fake", "hardware"), default="fake")
+    status.add_argument("--backend", choices=("fake", "real", "hardware"), default="fake")
     ready = commands.add_parser(
         "move-to-ready", help="Preview joint differences; never connect or move"
     )
@@ -44,7 +44,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "move-to-ready":
-        # Complete the offline branch before reaching any hardware factory.
+        # Complete the offline branch before reaching any RealArm construction.
         from .ready import move_to_ready
         from .ready_config import load_limits, load_route
 
@@ -66,14 +66,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # Obtain readings and validate them before printing a successful result.
 
     try:
-        if args.backend == "hardware":
-            # Import only when explicitly selected, then open the verified
-            # Pi connection. The adapter has no power or motion commands.
-
-            from .hardware import create_read_only_arm
-            arm = create_read_only_arm()
-        else:
-            arm = FakeArm()
+        arm = FakeArm() if args.backend == "fake" else RealArm()
 
         try:
             telemetry = arm.read_status()
