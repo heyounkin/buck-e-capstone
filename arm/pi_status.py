@@ -13,6 +13,7 @@ def main():
     # Stop before connecting if these differ from the setup tested on your Pi.
     if __version__ != "4.0.6":
         raise RuntimeError("This setup was tested with pymycobot 4.0.6")
+
     if PI_PORT != "/dev/ttyAMA0" or PI_BAUD != 1000000:
         raise RuntimeError("The library constants differ from your tested settings")
 
@@ -26,6 +27,9 @@ def main():
         for sample in range(1, 4):
             print("\nSample", sample)
             print("Joint angles:", arm.get_angles())
+
+            # Read status separately; angle, moving, and error replies are not
+            # an atomic sample. These diagnostics intentionally preserve raw values.
             print("Moving (0 = no, 1 = yes):", arm.is_moving())
             print("Error (0 = none):", arm.get_error_information())
             if sample < 3:

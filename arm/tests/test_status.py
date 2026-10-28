@@ -14,15 +14,21 @@ from bucke_arm.__main__ import main
 
 # unittest discovers methods beginning with test_ and reports pass/fail.
 class StatusTests(unittest.TestCase):
+    # These cases exercise both the pure telemetry model and its command-line
+    # wrapper. Any hardware branch is replaced before it can create a connection.
     def test_default_status_is_labeled_simulated(self):
         # StringIO collects printed text in memory rather than the terminal.
         output = io.StringIO()
+
         # Replace the hardware factory with a mock that records any calls.
         with patch("bucke_arm.hardware.create_read_only_arm") as hardware:
             with contextlib.redirect_stdout(output):
                 self.assertEqual(main(["status"]), 0)
+
             # Fake mode must never ask for a physical arm connection.
+
             hardware.assert_not_called()
+
         self.assertEqual(json.loads(output.getvalue())["source"], "simulated")
 
     def test_hardware_fails_without_simulated_fallback(self):
@@ -32,6 +38,7 @@ class StatusTests(unittest.TestCase):
         with patch("bucke_arm.hardware.create_read_only_arm", side_effect=RuntimeError("test connection failed")):
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
                 self.assertEqual(main(["status", "--backend", "hardware"]), 1)
+
         self.assertEqual(output.getvalue(), "")
         self.assertIn("test connection failed", error.getvalue())
 
@@ -51,6 +58,7 @@ class StatusTests(unittest.TestCase):
     def test_fake_is_repeatable(self):
         # Repeated calls should return identical data for predictable tests.
         arm = FakeArm()
+
         self.assertEqual(arm.read_status(), arm.read_status())
 
     def test_fresh_process_does_not_import_hardware_or_sdk(self):
@@ -64,8 +72,10 @@ class StatusTests(unittest.TestCase):
             "assert not any(n == 'pymycobot' or n.startswith('pymycobot.') "
             "for n in sys.modules)"
         )
+
         # Use the same Python interpreter as this test runner.
         result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
