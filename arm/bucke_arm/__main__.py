@@ -17,14 +17,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # The function returns 0 on success and 1 for a status or preview failure.
 
     parser = argparse.ArgumentParser(description="Buck-E arm status and offline preview")
+
+    # Subcommands keep hardware-only flags on status and offline inputs on ready.
     commands = parser.add_subparsers(dest="command", required=True)
     status = commands.add_parser("status", help="Read simulated or physical telemetry")
+
     # A backend is the source of the data. Default to the laptop fake.
 
     status.add_argument("--backend", choices=("fake", "hardware"), default="fake")
     ready = commands.add_parser(
         "move-to-ready", help="Preview joint differences; never connect or move"
     )
+
+    # nargs=6 requires one value for each joint. Explicit status inputs avoid
+    # silently assuming that a supplied pose was stationary and error-free.
     ready.add_argument("--angles", nargs=6, type=float, required=True,
                        metavar=("J1", "J2", "J3", "J4", "J5", "J6"))
     ready.add_argument("--moving", type=int, choices=(0, 1), required=True,
@@ -38,6 +44,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "move-to-ready":
+        # Complete the offline branch before reaching any hardware factory.
         from .ready import move_to_ready
         from .ready_config import load_limits, load_route
 
@@ -48,10 +55,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 route=load_route(args.route) if args.route else None,
             )
         except (ValueError, OSError) as error:
+            # Invalid poses/configurations produce an error and no partial JSON.
             print("Ready preview failed: " + str(error), file=sys.stderr)
             return 1
+
+        # Nested dataclasses become ordinary dictionaries; reject nonfinite JSON.
         print(json.dumps(asdict(preview), indent=2, allow_nan=False))
         return 0
+
     # Obtain readings and validate them before printing a successful result.
 
     try:
@@ -63,8 +74,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             arm = create_read_only_arm()
         else:
             arm = FakeArm()
+
         try:
             telemetry = arm.read_status()
+
             # Validate before reporting success, even with a future adapter.
             telemetry.validate()
         finally:

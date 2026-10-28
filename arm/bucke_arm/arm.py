@@ -9,11 +9,15 @@ from typing import Protocol, Tuple
 # frozen=True prevents assigning new field values after it is created.
 @dataclass(frozen=True)
 class Telemetry:
+    # This record intentionally contains only angles and tool coordinates.
+    # It does not establish movement/error status for a ready-pose execution.
     # Type hints describe the expected data; validate() checks it at runtime.
     # source distinguishes test data from future physical robot readings.
     source: str
+
     # Six angles, ordered by joint number, expressed in degrees.
     joint_angles_deg: Tuple[float, ...]
+
     # Intended format: x, y, z in mm, followed by three orientation values
     # in degrees. The real device's frame and orientation convention still
     # need verification. Tuple[float, ...] means a tuple of numeric values;
@@ -24,6 +28,7 @@ class Telemetry:
         # Reject data whose origin is not explicitly identified.
         if self.source not in ("simulated", "hardware"):
             raise ValueError("Telemetry source must be simulated or hardware")
+
         # Apply the same shape and number checks to both sets of readings.
         for name, values in (
             ("joint angles", self.joint_angles_deg),
@@ -31,6 +36,7 @@ class Telemetry:
         ):
             if len(values) != 6:
                 raise ValueError("Expected six values for " + name)
+
             # any() is true if even one value fails these checks.
             # Reject booleans explicitly: Python treats bool as a kind of int.
             # isfinite() rejects NaN (not a number) and positive/negative infinity.
@@ -49,11 +55,13 @@ class Telemetry:
 class ReadOnlyArm(Protocol):
     def read_status(self) -> Telemetry:
         """Return telemetry without issuing motion commands."""
+
         # This is an interface declaration, not a working implementation.
         ...
 
     def close(self) -> None:
         """Close the connection without issuing motion commands."""
+
         ...
 
 
@@ -61,6 +69,7 @@ class FakeArm:
     """Deterministic software fixture, not a physical robot model."""
 
     def read_status(self) -> Telemetry:
+        # This fixture is stateless: it cannot simulate commanded servo movement.
         # These fixed values let us develop on a laptop. They are not safe
         # motion targets, calibration, measured readings, or a physics model.
         telemetry = Telemetry(
@@ -68,6 +77,7 @@ class FakeArm:
             joint_angles_deg=(10.0, -20.0, 30.0, -40.0, 50.0, -60.0),
             tool_pose_mm_deg=(100.0, 20.0, 150.0, 0.0, 0.0, 0.0),
         )
+
         # Check the fake readings using the same rules as future real data.
         telemetry.validate()
         return telemetry
