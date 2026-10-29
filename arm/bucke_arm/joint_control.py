@@ -16,7 +16,7 @@ POST_SYNC_TIMEOUT = 5
 
 # Buck-E saved configurations (J1-J6)
 STANDBY_ANGLES = [0, 0, 90, 90, 90, -135]
-READY_ANGLES = [90, 0, 0, 0, 90, -135]
+READY_ANGLES = [-90, 0, 0, 0, 90, -135]
 
 # User confirmed both synchronous transitions work safely on October 28, 2026.
 # These flags record that report, not an independent hardware measurement.
@@ -134,7 +134,7 @@ def wait_for_target(target, timeout=POST_SYNC_TIMEOUT):
 
 
 def move_to_pose(name, start_name, start_pose, target_pose, path_verified):
-    """Run one named transition with local confirmation and no application retry."""
+    """Run the selected transition without a second confirmation prompt."""
     print(f"\n--- {name} TRANSITION ---")
     if not arm_ready():
         return False
@@ -171,10 +171,6 @@ def move_to_pose(name, start_name, start_pose, target_pose, path_verified):
 
     print("This moves multiple joints. Verify the entire route is clear.")
     print(f"Synchronous SDK move: speed {SYNC_SPEED}, timeout {SYNC_TIMEOUT} seconds.")
-    if input(f"Type {name} to execute: ").strip() != name:
-        print("Movement cancelled.")
-        return False
-
     if not arm_ready():
         return False
     latest = mc.get_angles()
@@ -225,7 +221,7 @@ def main(argv=None):
     print("R   : Move from standby to ready")
     print("S   : Move from ready to standby")
     print("Anything else : Quit\n")
-    print("R/S: synchronous all-joint movement, speed 5, one confirmation per pose.")
+    print("R/S: execute synchronous all-joint movement immediately, speed 5.")
 
     try:
         while True:

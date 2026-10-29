@@ -1,0 +1,104 @@
+{
+  "status": "provisional_not_validated_for_motion",
+  "date": "2026-10-28",
+  "mat_origin": "Directly below J1 rotation axis on tabletop, per user",
+  "mat_axes": {
+    "positive_x": "Toward Sharpie tip in supplied overhead photo",
+    "positive_y": "Toward pink pencil tip in supplied overhead photo",
+    "positive_z": "Up from tabletop"
+  },
+  "candidate_base_to_mat": {
+    "yaw_deg": 180,
+    "translation_mm": [
+      0,
+      0,
+      7.9375
+    ],
+    "equations": [
+      "mat_x = -base_x",
+      "mat_y = -base_y",
+      "mat_z = base_z + 7.9375"
+    ],
+    "assumptions": [
+      "Exact 180-degree yaw is inferred approximately, not calibrated",
+      "Model base origin assumed at physical robot mounting surface",
+      "No horizontal origin translation"
+    ]
+  },
+  "ready_check": {
+    "angles_deg": [
+      89.12,
+      -0.52,
+      0.35,
+      0,
+      90.7,
+      -134.29
+    ],
+    "candidate_tool_offset_flange_mm": [
+      4.490128060534576,
+      4.490128060534576,
+      100.0125
+    ],
+    "predicted_pickup_base_mm": [
+      -81.97461801580893,
+      1.0816419408169038,
+      424.4891724688167
+    ],
+    "predicted_pickup_mat_mm": [
+      81.97461801580893,
+      -1.0816419408169038,
+      432.4266724688167
+    ],
+    "observed_pickup_mat_mm": [
+      101.6,
+      0,
+      436.5625
+    ],
+    "predicted_minus_observed_mm": [
+      -19.625381984191065,
+      -1.0816419408169038,
+      -4.135827531183281
+    ],
+    "horizontal_discrepancy_mm": 19.65516642802969,
+    "position_discrepancy_mm": 20.08558280661129
+  },
+  "conclusion": "The fresh standby capture confirms the nominal standby joint pose, but the original tool offset plus inferred 180-degree base/mat yaw predicts opposite horizontal signs to the physical standby observation. The yaw and tool-frame correspondence remain unvalidated. Do not use this mapping for movement or fit an offset to hide the disagreement.",
+  "next_check": "At another already verified stationary pose with the same gripper mounting, record paired joint/flange readings and physical pickup XYZ in mat coordinates. Requires a pose suitable for the attached gripper; this report authorizes no movement.",
+  "pickup_location_mat_mm": [
+    177.8,
+    50.8,
+    0
+  ],
+  "pickup_location_note": "Prior mat (7,2) inches at table plane only; object grasp height, orientation, reachability, full-arm clearance and approach route remain unspecified or unvalidated.",
+  "standby_check": {
+    "source_report": "fk_standby_20261029T000002_737108Z.json",
+    "angles_deg": [
+      -0.61,
+      0.0,
+      89.91,
+      89.38,
+      89.56,
+      -134.29
+    ],
+    "observed_pickup_mat_mm": [
+      -88.9,
+      101.6,
+      180.975
+    ],
+    "observation_note": "Latest user correction: mat (-3.5,4) inches; retained height 7 1/8 inches. Earlier standby XY estimates superseded.",
+    "predicted_pickup_mat_mm": [
+      97.3031738480706,
+      -83.02850143223364,
+      177.54038659662567
+    ],
+    "predicted_minus_observed_mm": [
+      186.2031738480706,
+      -184.62850143223363,
+      -3.4346134033743283
+    ],
+    "flange_xyz_error_mm": 1.0797932980668619,
+    "capture_complete": true
+  },
+  "base_remained_fixed_between_observations": true,
+  "base_fixed_source": "Explicit user confirmation October 28, 2026"
+}

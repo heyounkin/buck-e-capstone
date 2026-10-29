@@ -80,6 +80,34 @@ class RealArm:
         telemetry.validate()
         return telemetry
 
+    def read_fk_sample(self):
+        """Bracket a coordinate query with stationary angles and reference reads.
+
+        Queries are sequential, not atomic. No settings or motion are changed.
+        """
+        def references():
+            result = {"reference_frame": self._client.get_reference_frame(),
+                      "end_type": self._client.get_end_type(),
+                      "tool_reference": _pose(self._client.get_tool_reference()),
+                      "world_reference": _pose(self._client.get_world_reference())}
+            for key in ("reference_frame", "end_type"):
+                if type(result[key]) is not int or result[key] != 0:
+                    raise RuntimeError("FK capture requires base frame and flange end type: " + repr(result))
+            if any(result[key] != (0,) * 6 for key in ("tool_reference", "world_reference")):
+                raise RuntimeError("FK capture requires zero tool/world references: " + repr(result))
+            return result
+
+        self._require_stationary()
+        before_reference = references()
+        before = self.get_angles()
+        coords = _pose(self._client.get_coords())
+        after = self.get_angles()
+        after_reference = references()
+        self._require_stationary()
+        return {"angles_before_deg": before, "angles_after_deg": after,
+                "reported_coords_mm_deg": coords,
+                "references_before": before_reference, "references_after": after_reference}
+
     def _motion_status(self):
         moving = self._client.is_moving()
         error = self._client.get_error_information()
@@ -176,7 +204,7 @@ class RealArm:
 
 
 class FakeArm:
-    """Immediate state changes for laptop development; no physics or kinematics."""
+    """Immediate state changes with nominal flange FK; no motion physics."""
 
     def __init__(self, angles=STANDBY_ANGLES):
         self._angles = _pose(angles)
@@ -186,8 +214,9 @@ class FakeArm:
         return self._angles
 
     def read_status(self):
-        # Tool coordinates are fixed sample data, not calculated from the angles.
-        return Telemetry("simulated", self._angles, (100.0, 20.0, 150.0, 0.0, 0.0, 0.0))
+        from .kinematics import forward_kinematics
+        return Telemetry("simulated", self._angles,
+                         forward_kinematics(self._angles).pose_mm_deg)
 
     def move_joint(self, joint, target, speed=10):
         _speed(speed)

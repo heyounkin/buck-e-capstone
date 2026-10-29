@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="680" viewBox="0 0 1100 680">
+<rect width="1100" height="680" fill="#f8fafc"/>
+<g font-family="Arial, sans-serif" fill="#172033">
+<text x="30" y="35" font-size="23" font-weight="bold">Physical measurements versus provisional model</text>
+<text x="30" y="62" font-size="15">Top view • same fixed mat frame for both poses • distances in mm</text>
+<path d="M75.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,120.0 H495" stroke="#dbe2ec"/>
+<path d="M110.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,155.0 H495" stroke="#dbe2ec"/>
+<path d="M145.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,190.0 H495" stroke="#dbe2ec"/>
+<path d="M180.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,225.0 H495" stroke="#dbe2ec"/>
+<path d="M215.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,260.0 H495" stroke="#dbe2ec"/>
+<path d="M250.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,295.0 H495" stroke="#dbe2ec"/>
+<path d="M285.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,330.0 H495" stroke="#dbe2ec"/>
+<path d="M320.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,365.0 H495" stroke="#dbe2ec"/>
+<path d="M355.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,400.0 H495" stroke="#dbe2ec"/>
+<path d="M390.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,435.0 H495" stroke="#dbe2ec"/>
+<path d="M425.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,470.0 H495" stroke="#dbe2ec"/>
+<path d="M460.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,505.0 H495" stroke="#dbe2ec"/>
+<path d="M495.0,120 V540" stroke="#dbe2ec"/>
+<path d="M75,540.0 H495" stroke="#dbe2ec"/>
+<text x="75" y="100" font-size="21" font-weight="bold">Ready</text>
+<path d="M75,330 H495 M285,120 V540" stroke="#8291a8" stroke-width="2"/>
+<text x="465" y="320" font-size="16">+Y</text>
+<text x="295" y="537" font-size="16">+X</text>
+<circle cx="285" cy="330" r="6" fill="#172033"/>
+<text x="295" y="320" font-size="14">J1 origin</text>
+<polyline points="285,330 285,330 285,330 283.597,329.978 284.589,239.514 284.263,240.909 284.062,304.748" fill="none" stroke="#2563eb" stroke-width="5" stroke-linejoin="round"/>
+<circle cx="285.0" cy="330.0" r="4" fill="#2563eb"/>
+<circle cx="285.0" cy="330.0" r="4" fill="#2563eb"/>
+<circle cx="283.59745143826314" cy="329.977883779238" r="4" fill="#2563eb"/>
+<circle cx="284.58850020706035" cy="239.51393963771574" r="4" fill="#2563eb"/>
+<circle cx="284.26267806717965" cy="240.90872263054683" r="4" fill="#2563eb"/>
+<circle cx="284.06211568854195" cy="304.74840753134686" r="4" fill="#2563eb"/>
+<path d="M284.06211568854195,304.74840753134686 L283.4857012828563,444.76446522213246" stroke="#0891b2" stroke-width="5"/>
+<circle cx="283.4857012828563" cy="444.76446522213246" r="7" fill="#0891b2"/>
+<path d="M283.4857012828563,444.76446522213246 L285.0,472.24" stroke="#dc2626" stroke-width="2" stroke-dasharray="5 5"/>
+<path d="M277.0,472.24 H293.0 M285.0,464.24 V480.24" stroke="#dc2626" stroke-width="4"/>
+<text x="75" y="575" font-size="15">Model pickup: (82.0, -1.1)</text>
+<text x="75" y="598" font-size="15">Measured pickup: (101.6, 0.0)</text>
+<path d="M605.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,120.0 H1025" stroke="#dbe2ec"/>
+<path d="M640.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,155.0 H1025" stroke="#dbe2ec"/>
+<path d="M675.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,190.0 H1025" stroke="#dbe2ec"/>
+<path d="M710.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,225.0 H1025" stroke="#dbe2ec"/>
+<path d="M745.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,260.0 H1025" stroke="#dbe2ec"/>
+<path d="M780.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,295.0 H1025" stroke="#dbe2ec"/>
+<path d="M815.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,330.0 H1025" stroke="#dbe2ec"/>
+<path d="M850.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,365.0 H1025" stroke="#dbe2ec"/>
+<path d="M885.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,400.0 H1025" stroke="#dbe2ec"/>
+<path d="M920.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,435.0 H1025" stroke="#dbe2ec"/>
+<path d="M955.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,470.0 H1025" stroke="#dbe2ec"/>
+<path d="M990.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,505.0 H1025" stroke="#dbe2ec"/>
+<path d="M1025.0,120 V540" stroke="#dbe2ec"/>
+<path d="M605,540.0 H1025" stroke="#dbe2ec"/>
+<text x="605" y="100" font-size="21" font-weight="bold">Standby</text>
+<path d="M605,330 H1025 M815,120 V540" stroke="#8291a8" stroke-width="2"/>
+<text x="995" y="320" font-size="16">+Y</text>
+<text x="825" y="537" font-size="16">+X</text>
+<circle cx="815" cy="330" r="6" fill="#172033"/>
+<text x="825" y="320" font-size="14">J1 origin</text>
+<polyline points="815,330 815,330 815,330 815.001,330 904.032,465.356 902.618,466.611 838.779,466.421" fill="none" stroke="#2563eb" stroke-width="5" stroke-linejoin="round"/>
+<circle cx="815.0" cy="330.0" r="4" fill="#2563eb"/>
+<circle cx="815.0" cy="330.0" r="4" fill="#2563eb"/>
+<circle cx="815.0005676983833" cy="330.0000060463195" r="4" fill="#2563eb"/>
+<circle cx="904.0320822057657" cy="465.35570049322405" r="4" fill="#2563eb"/>
+<circle cx="902.6182607848823" cy="466.61062685462423" r="4" fill="#2563eb"/>
+<circle cx="838.778543607258" cy="466.42070342668984" r="4" fill="#2563eb"/>
+<path d="M838.778543607258,466.42070342668984 L698.7600979948729,466.22444338729883" stroke="#0891b2" stroke-width="5"/>
+<circle cx="698.7600979948729" cy="466.22444338729883" r="7" fill="#0891b2"/>
+<path d="M698.7600979948729,466.22444338729883 L957.24,205.54000000000002" stroke="#dc2626" stroke-width="2" stroke-dasharray="5 5"/>
+<path d="M949.24,205.54000000000002 H965.24 M957.24,197.54000000000002 V213.54000000000002" stroke="#dc2626" stroke-width="4"/>
+<text x="605" y="575" font-size="15">Model pickup: (97.3, -83.0)</text>
+<text x="605" y="598" font-size="15">Measured pickup: (-88.9, 101.6)</text>
+<text x="30" y="635" font-size="14">Blue: model joint chain • Cyan: original candidate tool offset • Red cross: measured pickup point</text>
+<text x="30" y="658" font-size="14">Uses the unvalidated 180° yaw hypothesis. Joint pivots are not body or collision outlines.</text>
+</g></svg>

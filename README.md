@@ -18,7 +18,7 @@ python -m bucke_arm.joint_control          # RealArm on the Pi
 python -m bucke_arm.joint_control --fake   # FakeArm on a laptop
 ```
 
-Select R/READY to go from standby to ready, or S/STANDBY to return. Reusable
+Select R to go from standby to ready, or S to return; no second confirmation is required. Reusable
 movement checks live in `RealArm`, outside the menu. The classes and offline
 preview share the same saved ready pose.
 

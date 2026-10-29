@@ -1,0 +1,33 @@
+{
+  "status": "provisional_unvalidated",
+  "measurement_date": "2026-10-28",
+  "source": "User measurements and five photos confirmed taken at saved ready pose",
+  "outward_from_flange_face_mm": 100.0125,
+  "above_flange_center_at_ready_mm": 6.35,
+  "mounting_surface_above_table_mm": 7.9375,
+  "candidate_pickup_point_in_flange_mm": [
+    4.490128060534576,
+    4.490128060534576,
+    100.0125
+  ],
+  "assumptions": [
+    "Outward is model flange positive Z, normal to the mounting face",
+    "Above is base positive Z at nominal ready [90,0,0,0,90,-135]",
+    "No additional transverse pickup-point offset",
+    "Model flange origin coincides with the measured flange-face center"
+  ],
+  "unresolved": [
+    "Physical flange-frame correspondence to gripper starting surface",
+    "Physical validation of candidate flange-local pickup-point offset",
+    "Model base-origin height relative to physical mounting surface",
+    "Quantitative robot-to-mat yaw alignment beyond one approximately collinear point"
+  ],
+  "application": "Reference measurements only; not loaded automatically or written to SDK tool settings",
+  "outward_reference_note": "User later clarified the gripper starts above mat (0,0); equivalence of gripper start and model flange face is unverified.",
+  "measured_ready_pickup_mat_mm": [
+    101.6,
+    0,
+    436.5625
+  ],
+  "measured_ready_pickup_source": "User: directly below pickup is mat (4,0) inches; height 17 3/16 inches; origin below J1; directions marked by Sharpie (+X) and pink pencil (+Y)."
+}

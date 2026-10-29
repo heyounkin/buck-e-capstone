@@ -1,4 +1,4 @@
-"""Read-only status and connection-free ready-pose preview CLI."""
+"""Read-only status, offline forward kinematics and ready-pose preview CLI."""
 
 # argparse reads terminal arguments; asdict and json format the output.
 # sys supplies the error stream and lets us return an exit code to the shell.
@@ -16,7 +16,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # argv=None uses the terminal arguments. Tests can pass a list instead.
     # The function returns 0 on success and 1 for a status or preview failure.
 
-    parser = argparse.ArgumentParser(description="Buck-E arm status and offline preview")
+    parser = argparse.ArgumentParser(description="Buck-E arm status, offline FK and preview")
 
     # Subcommands keep hardware-only flags on status and offline inputs on ready.
     commands = parser.add_subparsers(dest="command", required=True)
@@ -25,6 +25,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # A backend is the source of the data. Default to the laptop fake.
 
     status.add_argument("--backend", choices=("fake", "real", "hardware"), default="fake")
+    fk = commands.add_parser("fk", help="Offline nominal flange FK and optional XYZ comparison")
+    fk.add_argument("--angles", nargs=6, type=float, required=True,
+                    metavar=("J1", "J2", "J3", "J4", "J5", "J6"))
+    fk.add_argument("--reported-xyz", nargs=3, type=float, metavar=("X", "Y", "Z"),
+                    help="Supplied base-frame flange coordinates in mm; no live query")
+    fk.add_argument("--tool-offset-mm", nargs=3, type=float, metavar=("X", "Y", "Z"),
+                    help="Optional flange-local pickup-point offset; no hardware setting is changed")
     ready = commands.add_parser(
         "move-to-ready", help="Preview joint differences; never connect or move"
     )
@@ -42,6 +49,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ready.add_argument("--route", metavar="JSON",
                        help="Explicit candidate route with starting ranges and waypoints")
     args = parser.parse_args(argv)
+
+    if args.command == "fk":
+        from .kinematics import forward_kinematics, compare_xyz, MODEL_URL
+        try:
+            pose = forward_kinematics(args.angles)
+            result = {"source": "offline_model", "frame": "base_to_flange",
+                      "model_url": MODEL_URL, "angles_deg": args.angles,
+                      "xyz_mm": pose.xyz_mm, "rotation_matrix": pose.rotation_matrix,
+                      "rpy_deg": pose.rpy_deg,
+                      "orientation_convention": "Rz(yaw) Ry(pitch) Rx(roll); SDK convention unverified",
+                      "transform_mm": pose.transform_mm}
+            if args.reported_xyz is not None:
+                result["comparison"] = compare_xyz(args.angles, args.reported_xyz)
+            if args.tool_offset_mm is not None:
+                result["tool_offset_flange_mm"] = args.tool_offset_mm
+                result["pickup_point_base_mm"] = pose.point_in_base(args.tool_offset_mm)
+        except ValueError as error:
+            print("FK failed: " + str(error), file=sys.stderr)
+            return 1
+        print(json.dumps(result, indent=2, allow_nan=False))
+        return 0
 
     if args.command == "move-to-ready":
         # Complete the offline branch before reaching any RealArm construction.

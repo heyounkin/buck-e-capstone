@@ -1,52 +1,73 @@
-"""The manual menu delegates arm behavior to RealArm/FakeArm."""
+"""Manual R/S selections execute without a second prompt; no real hardware."""
 
 import contextlib
 import io
 import unittest
 from unittest.mock import Mock, patch
 
-from bucke_arm import joint_control
+from bucke_arm import joint_control as control
+
+
+def client():
+    arm = Mock()
+    arm.get_angles.return_value = control.STANDBY_ANGLES.copy()
+    arm.is_moving.return_value = 0
+    arm.get_error_information.return_value = 0
+    arm.get_joint_min_angle.return_value = -180
+    arm.get_joint_max_angle.return_value = 180
+    return arm
 
 
 class JointControlTests(unittest.TestCase):
     def run_menu(self, arm, answers):
-        with patch.object(joint_control, "RealArm", return_value=arm), \
+        sdk = Mock()
+        sdk.MyCobot280.return_value = arm
+        with patch.dict("sys.modules", {"pymycobot": sdk}), \
                 patch("builtins.input", side_effect=answers), \
                 contextlib.redirect_stdout(io.StringIO()):
-            joint_control.main([])
+            control.main([])
 
-    def test_saved_pose_commands_delegate_once_and_close(self):
-        arm = Mock()
-        self.run_menu(arm, ["R", "READY", "S", "STANDBY", "quit"])
-        arm.move_to_ready.assert_called_once_with()
-        arm.move_to_standby.assert_called_once_with()
-        arm.close.assert_called_once_with()
+    def test_r_and_s_dispatch_without_consuming_confirmation_input(self):
+        arm = client()
+        with patch.object(control, "move_to_ready") as ready, \
+                patch.object(control, "move_to_standby") as standby:
+            self.run_menu(arm, ["R", "S", "quit"])
+        ready.assert_called_once_with()
+        standby.assert_called_once_with()
+        arm._serial_port.close.assert_called_once_with()
 
-    def test_cancellation_does_not_move(self):
-        arm = Mock()
-        self.run_menu(arm, ["R", "cancel", "S", "cancel", "quit"])
-        arm.move_to_ready.assert_not_called()
-        arm.move_to_standby.assert_not_called()
+    def test_both_transitions_send_without_prompt_and_verify_completion(self):
+        for method, start, target in ((control.move_to_ready, control.STANDBY_ANGLES, control.READY_ANGLES),
+                                      (control.move_to_standby, control.READY_ANGLES, control.STANDBY_ANGLES)):
+            with self.subTest(method=method.__name__):
+                arm = client()
+                arm.get_angles.side_effect = [start, start, target, target, target]
+                with patch.object(control, "mc", arm), \
+                        patch("builtins.input", side_effect=AssertionError("Unexpected confirmation prompt")), \
+                        patch.object(control.time, "sleep"), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertTrue(method())
+                arm.sync_send_angles.assert_called_once_with(target, control.SYNC_SPEED, timeout=control.SYNC_TIMEOUT)
 
-    def test_manual_joint_and_gripper_commands(self):
-        arm = Mock()
-        self.run_menu(arm, ["1", "25", "MOVE", "O", "C", "quit"])
-        arm.move_joint.assert_called_once_with(1, 25)
-        arm.open_gripper.assert_called_once_with()
-        arm.close_gripper.assert_called_once_with()
+    def test_wrong_start_still_blocks_transition(self):
+        arm = client()
+        arm.get_angles.return_value = [20] * 6
+        with patch.object(control, "mc", arm), contextlib.redirect_stdout(io.StringIO()):
+            self.assertFalse(control.move_to_ready())
+        arm.sync_send_angles.assert_not_called()
+
+    def test_individual_joint_still_requires_move_confirmation(self):
+        arm = client()
+        self.run_menu(arm, ["1", "25", "cancel", "quit"])
+        arm.send_angle.assert_not_called()
+        self.run_menu(arm, ["1", "25", "MOVE", "quit"])
+        arm.send_angle.assert_called_once_with(1, 25, control.SPEED)
 
     def test_interrupt_stops_and_closes(self):
-        arm = Mock()
+        arm = client()
         self.run_menu(arm, [KeyboardInterrupt()])
         arm.stop.assert_called_once_with()
-        arm.close.assert_called_once_with()
-
-    def test_fake_menu_never_constructs_real_arm(self):
-        with patch.object(joint_control, "RealArm") as real, \
-                patch("builtins.input", side_effect=["R", "READY", "S", "STANDBY", "quit"]), \
-                contextlib.redirect_stdout(io.StringIO()):
-            joint_control.main(["--fake"])
-        real.assert_not_called()
+        arm._serial_port.close.assert_called_once_with()
 
 
 if __name__ == "__main__":

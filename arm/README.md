@@ -27,8 +27,34 @@ finally:
 ```
 
 `FakeArm` starts at standby unless given an initial six-angle pose. Commands
-update its state immediately. Tool coordinates remain fixed sample data;
-it does not model motion, geometry, collisions or positioning accuracy.
+update its state immediately. Flange coordinates follow a nominal forward-
+kinematics model; it does not model motion physics, collisions or positioning
+accuracy. Model RPY conventions have not yet been matched to SDK orientation.
+
+## Offline forward kinematics
+
+From this folder:
+
+```sh
+python -m bucke_arm fk --angles 108.01 -19.59 11.07 145.81 76.28 -16.25 --reported-xyz 20.5 -1.3 290.5
+```
+
+This computes nominal base-to-flange XYZ, orientation and a 4x4 transform without
+connecting to the arm. The optional supplied XYZ produces a position-error
+comparison. See [model conventions and historical comparisons](docs/forward_kinematics.md)
+for geometry, frame assumptions, Python usage and remaining physical validation.
+
+To collect fresh read-only comparisons on the Pi at an existing stationary pose:
+
+```sh
+python3 -m bucke_arm.fk_capture --pose standby
+python3 -m bucke_arm.fk_capture --pose ready
+```
+
+Run each command only at its named pose, closing the manual controller first.
+Use the existing R/S controller between captures. Each run saves three paired
+samples and XYZ comparisons under `fk_reports/`. See the linked FK guide for
+transfer instructions and sampling checks. Capture itself never moves the arm.
 
 ## Manual testing
 
@@ -46,7 +72,8 @@ python -m bucke_arm.joint_control --fake
 ```
 
 Select 1-6 for an individual joint, O/C for the gripper, R for ready, or S for
-standby. Joint commands use `MOVE` confirmation; R/S use `READY`/`STANDBY`.
+standby. Joint commands use `MOVE` confirmation; R/S execute immediately without
+a second confirmation prompt.
 Ctrl+C requests stop and exiting closes the connection. Keep other programs
 communicating with the robot closed. Input prompts live in the menu; reusable
 arm methods do not prompt.
@@ -106,7 +133,8 @@ python -m unittest discover -s tests -v
 ```
 
 Tests cover both classes, synchronous saved-pose transitions, status, the manual
-menu and offline planning. All use software fixtures and do not move the robot.
+menu, offline planning and forward kinematics. All use software fixtures and do
+not move the robot.
 Old sequential, J4 recovery, J5 stepping and resting-log experiments are removed.
 Their evidence remains in `docs/pi_verification.md` and `docs/standby_plan.md`;
 commands in those historical notes may name retired scripts or architecture.
