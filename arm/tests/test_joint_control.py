@@ -34,8 +34,10 @@ class JointControlTests(unittest.TestCase):
         client.get_angles.side_effect = (
             [STANDBY_ANGLES] * 2 + [READY_ANGLES] * 5 + [STANDBY_ANGLES] * 3
         )
-        output = self.run_menu(client, ["R", "S", "Q"])
-        self.assertEqual(output.count("Pose confirmed."), 2)
+        output = self.run_menu(client, ["V", "25", "R", "S", "Q"])
+        for pose in ("READY", "STANDBY"):
+            self.assertIn(f"--- {pose} TRANSITION ---", output)
+            self.assertIn(f"{pose} POSITION CONFIRMED.", output)
         self.assertEqual(
             [(args, kwargs) for args, kwargs in client.sync_send_angles.call_args_list],
             [
@@ -54,6 +56,33 @@ class JointControlTests(unittest.TestCase):
         client = client_at_standby()
         self.run_menu(client, ["1", "25", "cancel", "1", "35", "MOVE", "Q"])
         client.send_angle.assert_called_once_with(1, 35, 10)
+
+    def test_manual_joint_speed_persists_and_invalid_entries_keep_it(self):
+        client = client_at_standby()
+        output = self.run_menu(client, [
+            "V", "25", "1", "30", "MOVE",
+            "V", "0", "V", "101", "V", "2.5",
+            "2", "40", "MOVE", "Q",
+        ])
+        self.assertIn("Joint speed set to 25.", output)
+        self.assertEqual(output.count("Joint speed setting: 25"), 2)
+        self.assertEqual(output.count("Speed must be an integer from 1 to 100"), 2)
+        self.assertIn("Enter a whole number for joint speed", output)
+        self.assertEqual([call.args for call in client.send_angle.call_args_list],
+                         [(1, 30, 25), (2, 40, 25)])
+
+    def test_j2_shows_local_and_controller_ranges_and_enforces_local_cap(self):
+        client = client_at_standby()
+        client.get_joint_min_angle.return_value = -140
+        client.get_joint_max_angle.return_value = 140
+        output = self.run_menu(client, ["2", "136", "2", "-135", "MOVE", "Q"])
+        self.assertIn("=== BUCK-E WORKSPACE CONTROLLER ===", output)
+        self.assertIn("1-6 : Move individual joint", output)
+        self.assertIn("--- JOINT 2 ---", output)
+        self.assertIn("Buck-E range: -135 to 135 degrees", output)
+        self.assertIn("Robot configured range: -140.0 to 140.0 degrees", output)
+        self.assertIn("Allowed target range: -135.0 to 135.0 degrees", output)
+        client.send_angle.assert_called_once_with(2, -135, 10)
 
     def test_joint_limit_is_rechecked_after_confirmation(self):
         client = client_at_standby()

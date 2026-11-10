@@ -17,9 +17,10 @@ accepted both endpoints for all six joints.
 | J6 | −180 to +180 |
 
 Buck-E's prior command table used ±135° for J2, ±145° for J4 and ±165° for
-J5. The command table and offline preview now match the readback. This
-diagnostic queried limits and ran local validation only. Physical travel and
-clearance at the endpoints remain unverified.
+J5. Buck-E uses tighter operator-specified caps for J2 (±135°) and J4 (±145°)
+in the command table and offline preview. The other joints match the readback.
+This diagnostic queried limits and ran local validation only. Physical travel
+and clearance at the endpoints remain unverified.
 
 ## Direct hover-return self-contact reported, November 5, 2026
 

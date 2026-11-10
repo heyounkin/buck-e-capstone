@@ -77,11 +77,14 @@ standby. Joint commands use `MOVE` confirmation; R/S execute immediately without
 a second confirmation prompt. Keep the sweep clear and close other serial
 clients before moving. Ctrl+C requests stop, and exiting closes the connection.
 
-The menu displays the range of allowed command targets in degrees. On the Pi
-that range is the overlap of the pinned SDK limits and valid live controller
-limits. The simulator uses the SDK limits. On November 9, 2026 the Pi reported
-the same limits as the SDK for all six joints, including J2 and J4 at ±140°
-and ±150° respectively, and J5 at −155° to +160°. See the
+Select `V` to set the speed for individual joint commands. Enter an integer
+from 1 to 100. The menu starts each session at 10 and shows the current
+setting before `MOVE`. R/S keep speed 5, and the gripper uses its own speed.
+
+The menu displays the Buck-E range, the robot's configured range when
+available, and their overlap as the allowed target range. The simulator uses
+the Buck-E range. Buck-E caps J2 at ±135° and J4 at ±145°. The Pi and SDK
+allow ±140° and ±150° respectively. See the
 [controller readback](docs/pi_verification.md#joint-limit-readback-november-9-2026).
 
 ## Saved standby and ready poses
@@ -126,8 +129,8 @@ python -m bucke_arm move-to-ready --angles -90 0 0 0 90 -130 --moving 0 --error 
 ```
 
 The example route is synthetic, not an execution path. `--limits PATH.json`
-selects different offline bounds. The bundled defaults match the SDK and the
-November 9 controller readback. Physical travel and clearance remain unverified.
+selects different offline bounds. The bundled defaults use Buck-E's command
+limits, including the J2 and J4 caps. Physical travel and clearance remain unverified.
 The preview runs offline.
 
 ## Hover experiments

@@ -12,13 +12,14 @@ STANDBY_ANGLES = (0, 0, 90, 90, 90, -135)
 READY_ANGLES = (-90, 0, 0, 0, 90, -135)
 POSE_TOLERANCE = 3.0
 POSE_SPEED = 5
+DEFAULT_JOINT_SPEED = 10
 MOVE_TIMEOUT = 120
 SETTLE_TIMEOUT = 5
-# MyCobot280 command bounds from pymycobot 4.0.6's RobotLimit table.
-# The Pi reported these same limits on November 9, 2026. Keep the offline
-# preview defaults in config/ready_limits.provisional.json in sync.
-SPEC_LIMITS = ((-168, 168), (-140, 140), (-150, 150),
-               (-150, 150), (-155, 160), (-180, 180))
+# Buck-E uses the MyCobot280 SDK bounds confirmed by the Pi readback, with
+# tighter operator-specified caps for J2 (±135 degrees) and J4 (±145 degrees).
+# Keep the offline preview defaults in config/ready_limits.provisional.json in sync.
+SPEC_LIMITS = ((-168, 168), (-135, 135), (-150, 150),
+               (-145, 145), (-155, 160), (-180, 180))
 
 
 def _pose(values):
@@ -32,7 +33,8 @@ def _matches(current, target, tolerance=POSE_TOLERANCE):
     return all(abs(a - b) <= tolerance for a, b in zip(current, target))
 
 
-def _speed(value):
+def validate_speed(value):
+    """Require an integer SDK speed setting from 1 to 100."""
     if type(value) is not int or not 1 <= value <= 100:
         raise ValueError("Speed must be an integer from 1 to 100")
 
@@ -48,7 +50,7 @@ def _joint_target(joint, target):
     if type(target) not in (int, float) or not math.isfinite(target):
         raise ValueError("Target must be a finite number")
     if not low <= target <= high:
-        raise ValueError(f"J{joint} target outside SDK limits [{low:g}, {high:g}] degrees")
+        raise ValueError(f"J{joint} target outside Buck-E limits [{low:g}, {high:g}] degrees")
 
 
 @dataclass(frozen=True)
@@ -133,19 +135,25 @@ class RealArm:
             raise RuntimeError("Arm must be stationary before a command")
 
     def joint_limits(self, joint):
-        """Intersect the SDK command bounds with valid limits read from the arm."""
+        """Return the range permitted by Buck-E and the controller."""
+        allowed, _ = self.joint_limit_ranges(joint)
+        return allowed
+
+    def joint_limit_ranges(self, joint):
+        """Return allowed bounds and the controller's raw bounds, if available."""
         low, high = _spec_limits(joint)
         try:
             robot_low = self._client.get_joint_min_angle(joint)
             robot_high = self._client.get_joint_max_angle(joint)
         except (AttributeError, OSError):
-            # Use the pinned SDK bounds when controller limits are unavailable.
-            return low, high
+            # Use the local bounds when controller limits are unavailable.
+            return (low, high), None
         if (type(robot_low) in (int, float) and type(robot_high) in (int, float)
                 and math.isfinite(robot_low) and math.isfinite(robot_high) and robot_low < robot_high):
-            # Live settings can narrow the SDK range on either side.
-            low, high = max(low, robot_low), min(high, robot_high)
-        return low, high
+            # Live settings can narrow the Buck-E range on either side.
+            allowed = max(low, robot_low), min(high, robot_high)
+            return allowed, (robot_low, robot_high)
+        return (low, high), None
 
     def _check_target(self, joint, target):
         _joint_target(joint, target)
@@ -153,20 +161,20 @@ class RealArm:
         if not low <= target <= high:
             raise ValueError(f"J{joint} target outside controller limits [{low:g}, {high:g}] degrees")
 
-    def move_joint(self, joint, target, speed=10):
+    def move_joint(self, joint, target, speed=DEFAULT_JOINT_SPEED):
         """Send a checked joint command. Observe arrival separately."""
-        _speed(speed)
+        validate_speed(speed)
         self._check_target(joint, target)
         self._require_stationary()
         self._client.send_angle(joint, target, speed)
 
     def open_gripper(self, speed=20):
-        _speed(speed)
+        validate_speed(speed)
         self._require_stationary()
         self._client.set_gripper_state(0, speed)
 
     def close_gripper(self, speed=20):
-        _speed(speed)
+        validate_speed(speed)
         self._require_stationary()
         self._client.set_gripper_state(1, speed)
 
@@ -409,22 +417,26 @@ class FakeArm:
                          forward_kinematics(self._angles).pose_mm_deg)
 
     def joint_limits(self, joint):
-        """Use the pinned SDK command bounds for simulated joints."""
+        """Use the Buck-E command bounds for simulated joints."""
         return _spec_limits(joint)
 
-    def move_joint(self, joint, target, speed=10):
-        _speed(speed)
+    def joint_limit_ranges(self, joint):
+        """Return the allowed bounds with no controller readback in simulation."""
+        return self.joint_limits(joint), None
+
+    def move_joint(self, joint, target, speed=DEFAULT_JOINT_SPEED):
+        validate_speed(speed)
         _joint_target(joint, target)
         updated = list(self._angles)
         updated[joint - 1] = target
         self._angles = tuple(updated)
 
     def open_gripper(self, speed=20):
-        _speed(speed)
+        validate_speed(speed)
         self.gripper_open = True
 
     def close_gripper(self, speed=20):
-        _speed(speed)
+        validate_speed(speed)
         self.gripper_open = False
 
     def move_to_ready(self):
