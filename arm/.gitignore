@@ -2,3 +2,5 @@ __pycache__/
 *.py[cod]
 .venv/
 config/hardware.local.json
+/fk_reports/
+/hover_trajectories/

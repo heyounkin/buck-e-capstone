@@ -1,6 +1,6 @@
 {
-  "minimum_deg": [-168, -135, -150, -145, -155, -180],
-  "maximum_deg": [168, 135, 150, 145, 160, 180],
-  "source": "Provisional offline bounds from Elephant Robotics pymycobot v4.0.6 MyCobot 280 API table: https://github.com/elephantrobotics/pymycobot/blob/v4.0.6/docs/MyCobot_280_en.md#send_angleid-degree-speed . Not read from this arm's controller.",
+  "minimum_deg": [-168, -140, -150, -150, -155, -180],
+  "maximum_deg": [168, 140, 150, 150, 160, 180],
+  "source": "MyCobot280 RobotLimit table in pymycobot v4.0.6 (https://github.com/elephantrobotics/pymycobot/blob/v4.0.6/pymycobot/robot_info.py). Matched the Pi controller readback on November 9, 2026. These offline bounds carry no physical travel verification.",
   "verified": false
 }

@@ -23,11 +23,18 @@
     "Quantitative robot-to-mat yaw alignment beyond one approximately collinear point"
   ],
   "application": "Reference measurements only; not loaded automatically or written to SDK tool settings",
-  "outward_reference_note": "User later clarified the gripper starts above mat (0,0); equivalence of gripper start and model flange face is unverified.",
+  "outward_reference_note": "November 3 correction: earlier reference was the camera flange. See corrected_flange_measurement; historical 100.0125 mm is not a verified actual-flange extension.",
   "measured_ready_pickup_mat_mm": [
     101.6,
     0,
     436.5625
   ],
-  "measured_ready_pickup_source": "User: directly below pickup is mat (4,0) inches; height 17 3/16 inches; origin below J1; directions marked by Sharpie (+X) and pink pencil (+Y)."
+  "measured_ready_pickup_source": "User: directly below pickup is mat (4,0) inches; height 17 3/16 inches; origin below J1; directions marked by Sharpie (+X) and pink pencil (+Y).",
+  "corrected_flange_measurement": {
+    "date": "2026-11-03",
+    "source": "User identified the old reference as the camera flange, not the actual flange; corrected 4 1/2 inches to approximately 4 11/16 inches.",
+    "actual_flange_to_gripper_midpoint_inches": 4.6875,
+    "actual_flange_to_gripper_midpoint_mm": 119.0625,
+    "note": "Historical candidate retained. Full flange-local vector, applicability of the earlier transverse offset, and equivalence of midpoint to previously measured pickup point remain unconfirmed."
+  }
 }

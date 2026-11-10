@@ -39,7 +39,7 @@ def main():
         print("\nServo status:", arm.get_servo_status())
         print("Servo voltages:", arm.get_servo_voltages())
         print("Servo temperatures:", arm.get_servo_temps())
-        
+
     finally:
         # This closes communication even if a reading fails. It does not stop
         # movement or change holding torque. This field was verified on the Pi.

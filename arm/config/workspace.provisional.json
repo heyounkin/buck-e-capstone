@@ -63,7 +63,7 @@
     "position_discrepancy_mm": 20.08558280661129
   },
   "conclusion": "The fresh standby capture confirms the nominal standby joint pose, but the original tool offset plus inferred 180-degree base/mat yaw predicts opposite horizontal signs to the physical standby observation. The yaw and tool-frame correspondence remain unvalidated. Do not use this mapping for movement or fit an offset to hide the disagreement.",
-  "next_check": "At another already verified stationary pose with the same gripper mounting, record paired joint/flange readings and physical pickup XYZ in mat coordinates. Requires a pose suitable for the attached gripper; this report authorizes no movement.",
+  "next_check": "Establish actual-flange-to-gripper local vector and whether midpoint is the same physical pickup point; reconcile standby directions using one fixed frame alignment.",
   "pickup_location_mat_mm": [
     177.8,
     50.8,
@@ -100,5 +100,40 @@
     "capture_complete": true
   },
   "base_remained_fixed_between_observations": true,
-  "base_fixed_source": "Explicit user confirmation October 28, 2026"
+  "base_fixed_source": "Explicit user confirmation October 28, 2026",
+  "corrected_flange_comparison": {
+    "date": "2026-11-03",
+    "status": "conditional_comparison_only",
+    "actual_flange_to_gripper_midpoint_mm": 119.0625,
+    "assumptions": [
+      "Treat 119.0625 mm as model flange +Z extension",
+      "Retain historical transverse offset and 180-degree base/mat yaw",
+      "Treat gripper midpoint as previously measured pickup point"
+    ],
+    "note": "Scalar measurement does not establish a complete tool transform. Historical checks retained.",
+    "ready_check": {
+      "predicted_pickup_mat_mm": [
+        101.02452399281482,
+        -1.1414899994084025,
+        432.42736320602705
+      ],
+      "predicted_minus_observed_mm": [
+        -0.5754760071851734,
+        -1.1414899994084025,
+        -4.135136793972947
+      ]
+    },
+    "standby_check": {
+      "predicted_pickup_mat_mm": [
+        97.24649940173741,
+        -102.07841702777876,
+        177.54233845205098
+      ],
+      "predicted_minus_observed_mm": [
+        186.1464994017374,
+        -203.67841702777875,
+        -3.43266154794901
+      ]
+    }
+  }
 }

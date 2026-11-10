@@ -132,11 +132,7 @@ the complete tool transform or base-to-mat alignment.
 
 ### Capture fresh standby and ready samples on the Pi
 
-Transfer the updated arm folder from Windows PowerShell, replacing `PI_ADDRESS`:
-
-```powershell
-scp -r "C:\Users\heath\OneDrive\Documents\Repos\buck-e-capstone\arm" er@PI_ADDRESS:/home/er/buck-e-capstone/
-```
+Transfer the updated [arm folder to the Pi](../README.md#copy-updates-to-the-pi).
 
 Close the manual controller and any other program using the serial connection.
 With the arm already stationary at standby, run on the Pi:

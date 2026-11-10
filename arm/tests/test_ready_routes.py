@@ -60,14 +60,14 @@ class ReadyRouteTests(unittest.TestCase):
         # The synthetic route specifies one intermediate pose; ready is appended.
         # Segment two must start at segment one's endpoint, not the original pose.
         route = load_route(EXAMPLE_ROUTE)
-        current = [90, 0, 0, 0, 90, -130]
+        current = [-90, 0, 0, 0, 90, -130]
         original = current.copy()
         result = self.preview(current, route=route)
         first, last = result.waypoint_steps
 
         self.assertEqual((first.step, last.step), (1, 2))
         self.assertEqual(first.from_angles_deg, tuple(current))
-        self.assertEqual(first.to_angles_deg, (90, 0, 0, 0, 90, -132))
+        self.assertEqual(first.to_angles_deg, (-90, 0, 0, 0, 90, -132))
         self.assertEqual(last.from_angles_deg, first.to_angles_deg)
         self.assertEqual(last.to_angles_deg, READY_ANGLES_DEG)
         self.assertEqual(first.joint_changes[5].delta_deg, -2)
@@ -81,7 +81,7 @@ class ReadyRouteTests(unittest.TestCase):
         route = load_route(EXAMPLE_ROUTE)
         for index in range(6):
             for endpoint, delta in [(route.start_min_deg, -.01), (route.start_max_deg, .01)]:
-                pose = [90, 0, 0, 0, 90, -130]
+                pose = [-90, 0, 0, 0, 90, -130]
                 pose[index] = endpoint[index] + delta
                 with self.subTest(index=index, delta=delta):
                     with self.assertRaisesRegex(ValueError, "does not support starting J%d" % (index + 1)):
@@ -89,6 +89,17 @@ class ReadyRouteTests(unittest.TestCase):
 
         self.preview(route.start_min_deg, route=route)
         self.preview(route.start_max_deg, route=route)
+
+    def test_route_without_waypoints_still_checks_supported_start(self):
+        route = ReadyRoute("direct", "Test fixture", (-91, -1, -1, -1, 89, -131),
+                           (-89, 1, 1, 1, 91, -129), ())
+
+        with self.assertRaisesRegex(ValueError, "does not support starting J1"):
+            self.preview([0, 0, 0, 0, 90, -130], route=route)
+
+        result = self.preview([-90, 0, 0, 0, 90, -130], route=route)
+        self.assertEqual(len(result.waypoint_steps), 1)
+        self.assertEqual(result.waypoint_steps[0].to_angles_deg, READY_ANGLES_DEG)
 
     def test_later_bad_waypoint_refuses_whole_preview(self):
         # A valid first waypoint cannot hide an out-of-bounds later destination.
@@ -108,7 +119,7 @@ class ReadyRouteTests(unittest.TestCase):
     def test_duplicate_waypoints_and_duplicate_ready_endpoint_are_skipped(self):
         # Repeated poses must not become extra candidate movement segments.
         limits = load_limits()
-        start = (90, 0, 0, 0, 90, -130)
+        start = (-90, 0, 0, 0, 90, -130)
         route = ReadyRoute("duplicates", "Test fixture", limits.minimum_deg,
                            limits.maximum_deg, (start, start, READY_ANGLES_DEG, READY_ANGLES_DEG))
         result = self.preview(start, route=route)
@@ -120,7 +131,7 @@ class ReadyRouteTests(unittest.TestCase):
         # Being at ready should not send the preview away just to follow waypoints.
         limits = load_limits()
         route = ReadyRoute("noop", "Test fixture", limits.minimum_deg, limits.maximum_deg,
-                           ((90, 0, 0, 0, 90, -130),))
+                           ((-90, 0, 0, 0, 90, -130),))
         result = self.preview(READY_ANGLES_DEG, route=route)
 
         self.assertTrue(result.exactly_at_target)
@@ -180,7 +191,7 @@ class ReadyRouteTests(unittest.TestCase):
         # adapter or SDK. %r embeds Windows paths as valid Python string literals.
         code = (
             "import sys; from bucke_arm.__main__ import main; "
-            "assert main(['move-to-ready', '--angles', '90', '0', '0', '0', '90', '-130', "
+            "assert main(['move-to-ready', '--angles', '-90', '0', '0', '0', '90', '-130', "
             "'--moving', '0', '--error', '0', '--route', %r, '--limits', %r]) == 0; "
             "assert not any(n == 'pymycobot' or n.startswith('pymycobot.') for n in sys.modules)"
         ) % (str(EXAMPLE_ROUTE), str(DEFAULT_LIMITS_PATH))

@@ -143,3 +143,65 @@ insufficient by itself for complete calibration of all unknown transforms.
 The prior intended pickup mat (7,2) inches gives horizontal coordinates
 `[177.8,50.8]` mm. Its object grasp height, tool orientation, reachability,
 full-arm clearance and approach route remain to be established before motion.
+
+## Actual flange reference correction, November 3, 2026
+
+The user identified the old measuring reference as the camera flange, not the
+actual robot flange. The corrected actual-flange-to-gripper-midpoint distance
+is approximately 4 11/16 inches (119.0625 mm), superseding their initial
+4 1/2-inch estimate. Historical candidate geometry and comparisons above are
+retained; 100.0125 mm is not a verified actual-flange extension.
+
+For a conditional offline comparison, replacing only candidate local Z with
+119.0625 mm while retaining the old transverse offset and 180-degree mat yaw:
+
+| Pose | Predicted mat XYZ (mm) | Predicted minus observed (mm) |
+| --- | --- | --- |
+| Ready | 101.025, -1.141, 432.427 | -0.575, -1.141, -4.135 |
+| Standby | 97.246, -102.078, 177.542 | 186.146, -203.678, -3.433 |
+
+Ready horizontal agreement improves substantially, but standby still has
+opposite horizontal signs. This does not establish a corrected complete tool
+transform: the new distance is assumed along model flange +Z and midpoint is
+assumed identical to the previously measured pickup point. The earlier 6.35 mm
+transverse offset may also reference the camera flange and needs clarification.
+Next establish those reference relationships before revising the tool vector.
+No active FK conventions, motion code or SDK settings were changed.
+
+## Standby actual flange observation
+
+The user located the actual flange center at approximately mat (-4, -1)
+inches and reported its face points toward mat +Y. The gripper midpoint was
+approximately (-4, +4) inches in this observation. These are rough landmarks.
+
+At the captured standby angles, FK predicts flange XY (-97.4, -17.0) mm
+in model base coordinates and flange +Z projects almost exactly along base
++Y. Direct horizontal alignment gives flange XY (-3.84, -0.67) inches
+and the observed facing direction. The provisional 180-degree alignment
+instead gives (+3.84, +0.67) inches and flips the facing direction to -Y.
+This supports direct horizontal alignment at standby. Under that alignment,
+the earlier corrected ready prediction would land near mat X -101 mm versus
+observed +102 mm. Check the actual flange center and facing direction at ready
+before adopting a global frame change.
+
+## Ready actual flange observation
+
+The user located the actual flange center near mat (-1, 0) inches at ready
+and reported that its face points toward mat +X. With direct horizontal
+alignment, FK at the captured ready angles gives flange XY (+0.71, +0.03)
+inches and a flange +Z direction near mat -X. As an offline diagnostic,
+negating only the FK input for J1 changes this to (-0.71, -0.05) inches
+and a facing direction near mat +X. Standby J1 is near zero, so the
+same diagnostic has little effect there. This makes J1 direction a
+candidate to verify against an independent physical J1 reference.
+
+The user's Pi controller screenshot subsequently showed ready target J1 -90
+degrees, final ready angles [-89.12, 0.61, 0.61, 0.61, 90.79, -134.2],
+and final standby J1 -0.96 degrees. Using the ready readings as displayed
+gives flange XY (-0.71, +0.23) inches with the face pointing nearly +X
+under direct alignment, consistent with the physical ready observation.
+The negative reported angle accounts for the directional mismatch without
+an FK sign conversion. The earlier positive-J1 capture represents different
+input and should not be paired with these physical ready landmarks. The Pi
+menu's negative ready target supersedes the former positive target. The
+primary checkout now uses the user-confirmed -90-degree ready target.

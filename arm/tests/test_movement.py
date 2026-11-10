@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from bucke_arm.arm import FakeArm, RealArm, READY_ANGLES, STANDBY_ANGLES, POSE_SPEED, MOVE_TIMEOUT
+from bucke_arm.ready_config import load_limits
 
 
 def client_at(pose):
@@ -108,6 +109,27 @@ class MovementTests(unittest.TestCase):
             arm.close_gripper()
             self.assertFalse(arm.gripper_open)
         version.assert_not_called()
+
+    def test_command_and_preview_bounds_match_pi_readback(self):
+        # The November 9 readback matched the SDK on every joint.
+        bounds = ((-168, 168), (-140, 140), (-150, 150),
+                  (-150, 150), (-155, 160), (-180, 180))
+        preview = load_limits()
+        self.assertEqual(tuple(zip(preview.minimum_deg, preview.maximum_deg)), bounds)
+
+        client = client_at(STANDBY_ANGLES)
+        client.get_joint_min_angle.side_effect = lambda joint: bounds[joint - 1][0]
+        client.get_joint_max_angle.side_effect = lambda joint: bounds[joint - 1][1]
+        real, fake = RealArm(client), FakeArm()
+        for joint, expected in enumerate(bounds, 1):
+            with self.subTest(joint=joint):
+                self.assertEqual(real.joint_limits(joint), expected)
+                self.assertEqual(fake.joint_limits(joint), expected)
+
+        for arm in (real, fake):
+            with self.assertRaisesRegex(ValueError, "outside SDK limits"):
+                arm.move_joint(5, -165)
+        client.send_angle.assert_not_called()
 
     def test_fake_and_real_reject_wrong_saved_start(self):
         for arm in (FakeArm([20] * 6), RealArm(client_at([20] * 6))):

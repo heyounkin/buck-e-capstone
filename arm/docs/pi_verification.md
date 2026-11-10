@@ -1,5 +1,45 @@
 # Pi configuration and read-only verification
 
+## Joint limit readback, November 9, 2026
+
+The operator's Pi terminal capture showed these values from
+`get_joint_min_angle()` and `get_joint_max_angle()`. They matched the
+`MyCobot280` limit table in pymycobot 4.0.6, and SDK argument validation
+accepted both endpoints for all six joints.
+
+| Joint | Controller and SDK bounds (degrees) |
+| --- | --- |
+| J1 | −168 to +168 |
+| J2 | −140 to +140 |
+| J3 | −150 to +150 |
+| J4 | −150 to +150 |
+| J5 | −155 to +160 |
+| J6 | −180 to +180 |
+
+Buck-E's prior command table used ±135° for J2, ±145° for J4 and ±165° for
+J5. The command table and offline preview now match the readback. This
+diagnostic queried limits and ran local validation only. Physical travel and
+clearance at the endpoints remain unverified.
+
+## Direct hover-return self-contact reported, November 5, 2026
+
+The user reported that one-command ready-to-hover worked well, but direct
+hover-to-ready caused the gripper to hit the arm near the end, when the gripper
+changed orientation. This is operator-reported contact; its joint angles,
+precise contact surfaces, stopping state and damage status were not supplied.
+An earlier return screenshot stopped on `error=-1`, an invalid query response;
+that screenshot does not identify the later contact pose or prove a controller
+collision fault. Do not treat saved endpoint angles as a reversible trajectory.
+
+Public hover-return execution is disabled in the local code. Forward continuous
+motion now records measured joint samples and status; reverse preview validates
+and reverses those samples offline only. The successful earlier forward run
+was not recorded, so its actual path is unavailable. No robot movement was
+performed by the assistant. Current post-contact telemetry and a successful
+measured forward trace are required before planning a corresponding return.
+See [hover trajectory status](resume_hover.md). The saved standby/ready paths
+documented separately below are not hover recovery routes.
+
 ## Arm class consolidation, October 28, 2026
 
 At the user's request, reusable hardware behavior now lives in `RealArm` and
@@ -174,8 +214,8 @@ Next: read-only diagnostics of stationary telemetry, error state, and the actual
 installed SDK command implementation. The local J1 helper's hardware CLI is now
 disabled before connecting; the Pi copy must be replaced to apply that block.
 No retry or alternate joint-ID test is approved by the previous one-test consent.
-See the [arm README](../README.md#next-small-milestone). GitHub authentication is
-still unverified, but no longer blocks transferred-file execution.
+GitHub authentication was still unverified at this stage. File transfer over
+SSH allowed execution on the Pi.
 
 Additional user evidence and diagnostic preparation:
 

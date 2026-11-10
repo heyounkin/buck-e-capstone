@@ -1,32 +1,20 @@
 # Buck-E Capstone
 
-Development workspace for Buck-E, an indoor mobile manipulation capstone using
-an Elephant Robotics myAGV Pi and myCobot 280 Pi arm.
+Buck-E is an indoor mobile manipulation project using an Elephant Robotics
+myAGV Pi base and myCobot 280 Pi arm. This repository currently contains the
+arm controller, simulator, and hardware validation records.
 
-## Arm
+## Run the arm simulator
 
-The [arm package](arm/README.md) provides `RealArm` for the Pi and `FakeArm`
-for laptop development. Both expose the same status, joint, gripper and saved-pose
-methods. The user confirmed synchronous standby-to-ready and return movements
-work safely on October 28, 2026.
-
-`joint_control.py` is a small manual testing menu:
+From the repository root:
 
 ```sh
 cd arm
-python -m bucke_arm.joint_control          # RealArm on the Pi
-python -m bucke_arm.joint_control --fake   # FakeArm on a laptop
-```
-
-Select R to go from standby to ready, or S to return; no second confirmation is required. Reusable
-movement checks live in `RealArm`, outside the menu. The classes and offline
-preview share the same saved ready pose.
-
-```sh
 python -m bucke_arm status
-python -m unittest discover -s tests -v
+python -m bucke_arm.joint_control --fake
+python -m unittest discover -s tests
 ```
 
-Historical observations are preserved in the
-[Pi verification record](arm/docs/pi_verification.md). Calibration, pick-and-place,
-vision, and mobile-base coordination remain future milestones.
+See the [arm guide](arm/README.md) for Pi setup, command behavior, and offline
+tools. The [Pi verification record](arm/docs/pi_verification.md) documents
+hardware observations and earlier experiments.

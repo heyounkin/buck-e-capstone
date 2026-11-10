@@ -23,8 +23,8 @@ class ReadyTests(unittest.TestCase):
         original = angles.copy()
         result = self.preview(angles)
 
-        self.assertEqual(result.target_angles_deg, (90, 0, 0, 0, 90, -135))
-        self.assertAlmostEqual(result.joint_changes[0].delta_deg, -76.72)
+        self.assertEqual(result.target_angles_deg, (-90, 0, 0, 0, 90, -135))
+        self.assertAlmostEqual(result.joint_changes[0].delta_deg, -256.72)
         self.assertAlmostEqual(result.joint_changes[4].delta_deg, .88)
         self.assertAlmostEqual(result.joint_changes[5].delta_deg, -.88)
         self.assertEqual(angles, original)
@@ -35,7 +35,7 @@ class ReadyTests(unittest.TestCase):
 
     def test_j6_positive_to_negative_uses_long_signed_difference(self):
         # Do not replace the bounded interval with a modulo-360 shortcut.
-        result = self.preview([90, 0, 0, 0, 90, 180])
+        result = self.preview([-90, 0, 0, 0, 90, 180])
 
         self.assertEqual(result.joint_changes[5].delta_deg, -315)
 
@@ -46,7 +46,7 @@ class ReadyTests(unittest.TestCase):
 
         self.assertTrue(result.exactly_at_target)
         self.assertTrue(all(change.delta_deg == 0 for change in result.joint_changes))
-        near = self.preview([90, 0, 0, 0, 90, -134.9])
+        near = self.preview([-90, 0, 0, 0, 90, -134.9])
 
         self.assertFalse(near.exactly_at_target)
 
@@ -100,7 +100,7 @@ class ReadyTests(unittest.TestCase):
         # Inspect imports as well as the JSON result to detect hardware coupling.
         code = (
             "import sys; from bucke_arm.__main__ import main; "
-            "assert main(['move-to-ready', '--angles', '90', '0', '0', '0', '90', '-135', "
+            "assert main(['move-to-ready', '--angles', '-90', '0', '0', '0', '90', '-135', "
             "'--moving', '0', '--error', '0']) == 0; "
             "assert not any(n == 'pymycobot' or n.startswith('pymycobot.') for n in sys.modules)"
         )
