@@ -73,13 +73,30 @@ python -m bucke_arm.joint_control --fake
 ```
 
 Select 1-6 for an individual joint, O/C for the gripper, R for ready, or S for
-standby. Joint commands use `MOVE` confirmation; R/S execute immediately without
-a second confirmation prompt. Keep the sweep clear and close other serial
+standby. Select P to query the current angles and gripper XYZ. Entering a valid
+individual joint target executes the movement. R/S execute immediately.
+Keep the sweep clear and close other serial
 clients before moving. Ctrl+C requests stop, and exiting closes the connection.
 
 Select `V` to set the speed for individual joint commands. Enter an integer
 from 1 to 100. The menu starts each session at 10 and shows the current
-setting before `MOVE`. R/S keep speed 5, and the gripper uses its own speed.
+setting when executing a joint command. R/S keep speed 5, and the gripper uses its own speed.
+
+After an arm movement, the menu prints estimated gripper midpoint X, Y and Z
+in mat inches, alongside the six actual joint readings used in that estimate.
+P takes a fresh read-only snapshot using the same calculation. A printed
+snapshot can become stale if a joint moves afterward. Individual joint
+commands wait up to 120 seconds for three
+consecutive stationary, fault-free readings within 3 degrees of the expected
+angles before reporting XYZ. The estimate uses the final joint readings and
+one fixed flange-local pad offset that includes the camera mount and gripper,
+followed by one base-to-mat transform with zero base roll and pitch. This
+provisional fit uses the November 10 Ready/Standby measurements and predicts
+those two pad positions within 2.3 mm. It uses the closed-pad reference even
+when the jaws are open. Mounting changes require recalibration. Independent
+accuracy elsewhere in the workspace remains unverified. See the
+[workspace validation notes](docs/workspace_validation.md) for the measurements,
+parameters and remaining flange residuals.
 
 The menu displays the Buck-E range, the robot's configured range when
 available, and their overlap as the allowed target range. The simulator uses
@@ -117,6 +134,8 @@ python -m bucke_arm status --backend real  # RealArm; query telemetry on the Pi
 
 The older `--backend hardware` spelling is accepted as an alias for `real`.
 Hardware status failures are reported without falling back to simulated data.
+Malformed telemetry errors identify `get_angles()` or `get_coords()` and show
+the raw reply. Both queries must return six finite numbers for status to succeed.
 `pi_status.py` remains a standalone raw Pi diagnostic for firmware, joint angles,
 motion/errors, servo status, voltages and temperatures.
 

@@ -26,6 +26,15 @@ JOINT_ORIGINS = (
     ((0, 45.6, 0), (-1.5708, 0, 0)),
 )
 
+# Provisional November 10 calibration for the current fixed base, camera mount
+# and closed-pad reference. Fit the paired Ready/Standby observations with
+# base roll/pitch fixed to zero because the mounting surface is parallel to
+# the tabletop. The combined tool vector includes the camera mount and gripper.
+# See docs/workspace_validation.md for observations, residuals and scope.
+MAT_YAW_DEG = -2.7349205960277354
+MAT_TRANSLATION_MM = (0.08988863078134302, -7.079468095578469, 14.105560122077142)
+CLOSED_PAD_OFFSET_MM = (6.966863289535318, 11.651398530824967, 120.24856337987121)
+
 
 def _values(values, count):
     if (not isinstance(values, (list, tuple)) or len(values) != count
@@ -111,3 +120,17 @@ def compare_xyz(angles_deg, reported_xyz_mm):
     return {"predicted_xyz_mm": predicted, "reported_xyz_mm": reported,
             "delta_xyz_mm": delta,
             "position_error_mm": math.sqrt(sum(d*d for d in delta))}
+
+
+def gripper_midpoint_mat(angles_deg):
+    """Estimate the closed-pad midpoint in mat millimetres from reported angles.
+
+    One fixed flange-local tool vector rotates with the wrist, then one fixed
+    level-base transform maps to the mat. The two-pose fit remains provisional;
+    it does not establish workspace accuracy or collision clearance.
+    """
+    x, y, z = forward_kinematics(angles_deg).point_in_base(CLOSED_PAD_OFFSET_MM)
+    yaw = math.radians(MAT_YAW_DEG)
+    cosine, sine = math.cos(yaw), math.sin(yaw)
+    tx, ty, tz = MAT_TRANSLATION_MM
+    return (tx + cosine*x - sine*y, ty + sine*x + cosine*y, tz + z)

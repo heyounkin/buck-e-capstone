@@ -75,6 +75,25 @@ class HardwareTests(unittest.TestCase):
         client.get_coords.assert_called_once_with()
         client._serial_port.close.assert_called_once_with()
 
+    def test_invalid_replies_identify_query_and_raw_value(self):
+        # Both queries can return malformed telemetry. Preserve the actual reply
+        # for diagnosis while still failing status and closing the connection.
+        for query in ("get_angles", "get_coords"):
+            for reply in (None, [], -1, [1.0] * 5, [float("nan")] * 6):
+                with self.subTest(query=query, reply=reply):
+                    client = self.client()
+                    getattr(client, query).return_value = reply
+                    output, error = io.StringIO(), io.StringIO()
+                    with patch("bucke_arm.__main__.RealArm", return_value=RealArm(client)):
+                        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                            self.assertEqual(main(["status", "--backend", "real"]), 1)
+                    self.assertEqual(output.getvalue(), "")
+                    self.assertIn(f"{query}() returned {reply!r}", error.getvalue())
+                    getattr(client, query).assert_called_once_with()
+                    if query == "get_angles":
+                        client.get_coords.assert_not_called()
+                    client._serial_port.close.assert_called_once_with()
+
     def test_failed_reads_close_without_fake_fallback(self):
         # Simulate missing, malformed, and failed serial replies. None may be
         # replaced with successful-looking simulated readings after failure.

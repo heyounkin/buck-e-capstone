@@ -22,10 +22,13 @@ SPEC_LIMITS = ((-168, 168), (-135, 135), (-150, 150),
                (-145, 145), (-155, 160), (-180, 180))
 
 
-def _pose(values):
+def _pose(values, *, source=None):
     if (not isinstance(values, (list, tuple)) or len(values) != 6
             or any(type(v) not in (int, float) or not math.isfinite(v) for v in values)):
-        raise ValueError("Expected six finite numeric angles/coordinates")
+        message = "Expected six finite numeric angles/coordinates"
+        if source is not None:
+            message += f"; {source} returned {values!r}"
+        raise ValueError(message)
     return tuple(values)
 
 
@@ -86,11 +89,14 @@ class RealArm:
         self._client = client
 
     def get_angles(self):
-        return _pose(self._client.get_angles())
+        return _pose(self._client.get_angles(), source="get_angles()")
 
     def read_status(self):
         """Read joint angles and coordinates in the current controller frames."""
-        telemetry = Telemetry("hardware", self.get_angles(), _pose(self._client.get_coords()))
+        # Keep the failing SDK query and raw reply visible when telemetry is
+        # malformed; an angle failure and a coordinate failure need different diagnosis.
+        telemetry = Telemetry("hardware", self.get_angles(),
+                              _pose(self._client.get_coords(), source="get_coords()"))
         telemetry.validate()
         return telemetry
 
@@ -161,12 +167,25 @@ class RealArm:
         if not low <= target <= high:
             raise ValueError(f"J{joint} target outside controller limits [{low:g}, {high:g}] degrees")
 
-    def move_joint(self, joint, target, speed=DEFAULT_JOINT_SPEED):
-        """Send a checked joint command. Observe arrival separately."""
+    def move_joint(self, joint, target, speed=DEFAULT_JOINT_SPEED, *, wait=False):
+        """Send a checked joint command and optionally return settled angles."""
         validate_speed(speed)
         self._check_target(joint, target)
+        if wait:
+            expected = list(self.get_angles())
+            expected[joint - 1] = target
         self._require_stationary()
-        self._client.send_angle(joint, target, speed)
+        try:
+            self._client.send_angle(joint, target, speed)
+            if wait:
+                return self._wait_for_target(expected, timeout=MOVE_TIMEOUT)
+        except BaseException:
+            if wait:
+                try:
+                    self.stop()
+                except Exception:
+                    pass  # Preserve the original failure if stop also fails.
+            raise
 
     def open_gripper(self, speed=20):
         validate_speed(speed)
@@ -376,17 +395,17 @@ class RealArm:
             raise
         return True
 
-    def _wait_for_target(self, target, tolerance=POSE_TOLERANCE):
+    def _wait_for_target(self, target, tolerance=POSE_TOLERANCE, *, timeout=SETTLE_TIMEOUT):
         """Confirm arrival across three consecutive stationary, fault-free samples."""
         started = time.monotonic()
         settled = 0
-        while time.monotonic() - started < SETTLE_TIMEOUT:
+        while time.monotonic() - started < timeout:
             moving = self._motion_status()
             current = self.get_angles()
             reached = _matches(current, target, tolerance)
             settled = settled + 1 if moving == 0 and reached else 0
             if settled >= 3:
-                return
+                return current
             time.sleep(0.2)
         raise RuntimeError("Target not confirmed within pose tolerance")
 
@@ -424,12 +443,14 @@ class FakeArm:
         """Return the allowed bounds with no controller readback in simulation."""
         return self.joint_limits(joint), None
 
-    def move_joint(self, joint, target, speed=DEFAULT_JOINT_SPEED):
+    def move_joint(self, joint, target, speed=DEFAULT_JOINT_SPEED, *, wait=False):
         validate_speed(speed)
         _joint_target(joint, target)
         updated = list(self._angles)
         updated[joint - 1] = target
         self._angles = tuple(updated)
+        if wait:
+            return self._angles
 
     def open_gripper(self, speed=20):
         validate_speed(speed)

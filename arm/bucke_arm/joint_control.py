@@ -6,10 +6,20 @@ from .arm import (
     DEFAULT_JOINT_SPEED, FakeArm, MOVE_TIMEOUT, POSE_SPEED, READY_ANGLES, RealArm,
     SPEC_LIMITS, STANDBY_ANGLES, validate_speed,
 )
+from .kinematics import gripper_midpoint_mat
+
+
+def _print_gripper_xyz(angles):
+    """Pair one reported-angle snapshot with its closed-pad position estimate."""
+    x, y, z = gripper_midpoint_mat(angles)
+    print("Reported joint angles (degrees, J1-J6): " +
+          ", ".join(f"{angle:.2f}" for angle in angles))
+    print(f"Estimated gripper midpoint (mat, inches): "
+          f"X={x / 25.4:.2f}, Y={y / 25.4:.2f}, Z={z / 25.4:.2f}")
 
 
 def _move_joint(arm, joint, speed):
-    """Show the current angle and proposed change before asking for MOVE."""
+    """Execute a valid joint target and report its settled position."""
     # The menu and SDK number joints J1-J6. The telemetry tuple starts at zero.
     current = arm.get_angles()[joint - 1]
     local_low, local_high = SPEC_LIMITS[joint - 1]
@@ -36,14 +46,10 @@ def _move_joint(arm, joint, speed):
     print(f"\nJ{joint}: {current:.2f} -> {target:.2f}")
     print(f"Angle change: {target - current:+.2f} degrees")
     print(f"Joint speed setting: {speed}")
-    if input("Type MOVE to execute: ").strip() != "MOVE":
-        print("Movement cancelled.")
-        return
-
     # The displayed limits are for the operator. The arm rechecks limits and
-    # motion status after confirmation, immediately before sending the command.
-    arm.move_joint(joint, target, speed=speed)
-    print("Command sent. Verify motion is complete.\n")
+    # motion status immediately before sending the command.
+    print("Waiting for joint to settle...")
+    _print_gripper_xyz(arm.move_joint(joint, target, speed=speed, wait=True))
 
 
 def _move_to_saved_pose(arm, choice):
@@ -61,6 +67,12 @@ def _move_to_saved_pose(arm, choice):
     print("This moves multiple joints. Verify the entire route is clear.")
     move()
     print(f"{name} POSITION CONFIRMED.")
+    try:
+        angles = arm.get_angles()
+    except (ValueError, RuntimeError, OSError) as error:
+        print(f"Gripper XYZ unavailable: {error}")
+    else:
+        _print_gripper_xyz(angles)
 
 
 def main(argv=None):
@@ -83,11 +95,14 @@ def main(argv=None):
     print("\n=== BUCK-E WORKSPACE CONTROLLER ===")
     if args.fake:
         print("(simulated)")
+    print("XYZ uses a provisional Ready/Standby fit for the current closed-pad reference.")
     print("1-6 : Move individual joint")
+    print("Entering a valid joint target executes the movement.")
     print("O   : Open gripper")
     print("C   : Close gripper")
     print("R   : Move from standby to ready")
     print("S   : Move from ready to standby")
+    print("P   : Read current joint angles and gripper XYZ")
     print(f"V   : Set individual joint speed (default {joint_speed})")
     print("Anything else : Quit\n")
     print(f"R/S: execute synchronous all-joint movement immediately, speed {POSE_SPEED}.")
@@ -95,11 +110,13 @@ def main(argv=None):
         print(f"SDK timeout: {MOVE_TIMEOUT} seconds.")
     try:
         while True:
-            choice = input("Select (1-6 / O / C / R / S / V): ").strip().upper()
+            choice = input("Select (1-6 / O / C / R / S / P / V): ").strip().upper()
             try:
                 # R/S request the saved all-joint transition without another prompt.
                 if choice in ("R", "S"):
                     _move_to_saved_pose(arm, choice)
+                elif choice == "P":
+                    _print_gripper_xyz(arm.get_angles())
                 # Gripper commands use the checks in the selected arm.
                 elif choice in ("O", "C"):
                     if choice == "O":
@@ -117,7 +134,7 @@ def main(argv=None):
                     validate_speed(speed)
                     joint_speed = speed
                     print(f"Joint speed set to {joint_speed}.")
-                # Individual joints have a separate confirmation step.
+                # A valid individual-joint target executes immediately.
                 elif choice in ("1", "2", "3", "4", "5", "6"):
                     _move_joint(arm, int(choice), joint_speed)
                 else:

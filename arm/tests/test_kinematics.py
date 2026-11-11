@@ -9,10 +9,41 @@ from unittest.mock import patch
 
 from bucke_arm.arm import FakeArm
 from bucke_arm.__main__ import main
-from bucke_arm.kinematics import forward_kinematics, compare_xyz, _transform
+from bucke_arm.kinematics import (
+    CLOSED_PAD_OFFSET_MM, MAT_TRANSLATION_MM, MAT_YAW_DEG,
+    forward_kinematics, compare_xyz, gripper_midpoint_mat, _transform,
+)
 
 
 class KinematicsTests(unittest.TestCase):
+    def test_provisional_mat_estimate_matches_measured_pad_positions(self):
+        for angles, measured_inches in (
+                ([-89.29, 0.35, -0.7, -0.7, 89.2, -134.29], [4, -0.625, 17.5]),
+                ([-0.7, 0.79, 90, 89.38, 89.29, -134.29], [-3.875, 4, 6.875])):
+            with self.subTest(angles=angles):
+                predicted = gripper_midpoint_mat(angles)
+                measured = [value * 25.4 for value in measured_inches]
+                self.assertLess(math.sqrt(sum((a-b)**2 for a, b in zip(predicted, measured))), 2.3)
+
+    def test_mat_tool_vector_rotates_with_wrist_and_preserves_length(self):
+        # Mat yaw rotates about vertical. A flange-local offset must rotate
+        # with J6 before the fixed mat transform is applied.
+        points = []
+        for j6 in (-134.29, -44.29):
+            angles = [-89.29, 0.35, -0.7, -0.7, 89.2, j6]
+            flange = forward_kinematics(angles).xyz_mm
+            yaw = math.radians(MAT_YAW_DEG)
+            origin = (
+                MAT_TRANSLATION_MM[0] + math.cos(yaw)*flange[0] - math.sin(yaw)*flange[1],
+                MAT_TRANSLATION_MM[1] + math.sin(yaw)*flange[0] + math.cos(yaw)*flange[1],
+                MAT_TRANSLATION_MM[2] + flange[2],
+            )
+            point = gripper_midpoint_mat(angles)
+            distance_squared = sum((a-b)**2 for a, b in zip(point, origin))
+            self.assertAlmostEqual(distance_squared, sum(v*v for v in CLOSED_PAD_OFFSET_MM))
+            points.append(point)
+        self.assertGreater(math.sqrt(sum((a-b)**2 for a, b in zip(*points))), 10)
+
     def test_flange_local_pickup_point_rotates_with_wrist(self):
         offset = [6.35/math.sqrt(2), 6.35/math.sqrt(2), 100.0125]
         pose = forward_kinematics([90, 0, 0, 0, 90, -135])
