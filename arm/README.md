@@ -1,7 +1,8 @@
 # Buck-E arm
 
 The arm runs on a myCobot 280 Pi with Python 3.8.10, pymycobot 4.0.6 and
-pyserial 3.5. Laptop commands and tests use the Python standard library.
+pyserial 3.5. Laptop commands and tests use the Python standard library, with
+Matplotlib needed for the optional workspace plot.
 
 ## Arm classes
 
@@ -56,6 +57,33 @@ Run each command only at its named pose, closing the manual controller first.
 Use the existing R/S controller between captures. Each run saves three paired
 samples and XYZ comparisons under `fk_reports/`. See the linked FK guide for
 transfer instructions and sampling checks. Capture itself never moves the arm.
+
+## Plot the workspace
+
+From this folder on your laptop:
+
+```sh
+python -m pip install matplotlib
+python -m bucke_arm.workspace
+```
+
+The plot samples 30,000 joint configurations within Buck-E's configured angle
+ranges and uses forward kinematics to calculate the wrist flange position for
+each one. The window shows a rotatable 3D scatter plot in base millimetres,
+colored by height. Add `--units in` to display the axes and height color bar in
+inches. Add `--samples 5000` for a quicker run or `--seed 13` for a
+different random sample. Save a plot to PNG with `--output workspace.png`.
+
+Add `--boundary-only` to keep the farthest sampled point in each angular sector
+around the point cloud's center, plus the minimum and maximum along each axis.
+For example, `python -m bucke_arm.workspace --boundary-only --units in` shows
+the sampled outer envelope of the wrist flange in inches. The result
+approximates the outer boundary and omits internal gaps.
+
+Use `--point gripper` to plot the estimated closed-pad midpoint in mat
+coordinates using the provisional tool calibration. Both plot modes run
+offline. The point clouds do not account for collisions, table clearance, or
+whether a continuous path exists to each sampled point.
 
 ## Manual testing
 
