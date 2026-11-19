@@ -447,8 +447,8 @@ class RealArm:
             # Replay the command that produced the measured post-alignment
             # checkpoint. Keep the current signed wrist angle; never spin it
             # back to the stale value embedded in the historical snapshot.
-            desired=POST_HOVER_OBSERVED[:5]+(high[5],)
-            command=POST_HOVER_COMMAND[:5]+(high[5],)
+            desired=POST_HOVER_OBSERVED[:4]+(high[4],high[5])
+            command=POST_HOVER_COMMAND[:4]+(high[4],high[5])
             for joint,angle in enumerate(command,1):
                 self._check_target(joint,angle)
             self._check_stopped_pose(high,.25,"High HOVER changed before taught transfer")
