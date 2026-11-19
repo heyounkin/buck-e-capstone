@@ -799,3 +799,605 @@ The four original text outputs are preserved under [evidence/2026-10-13](evidenc
 - `buck-e-pi-info4.txt`: installed arm constructor source.
 
 Parent-constructor inspection, telemetry results, and deployment errors above were transcribed from screenshots provided in this chat. Their original text logs were not supplied. [hardware.observed.json](../config/hardware.observed.json) summarizes the observations for reference; the current adapter does not load that file.
+
+
+## November 18 continuous pickup preparation
+
+The operator specified a one-inch-tall block, slightly over one inch wide,
+at mat (7, 2), and measured the lowest finger point 1/2 inch below the pad
+midpoint with the gripper pointing down. They subsequently confirmed physical
+clearance. The planned midpoint height is 5/8 inch, leaving 1/8 inch nominal
+finger/table clearance. This supersedes the earlier 1/2-inch candidate, which
+would have zero nominal tip clearance.
+
+The local pickup command now supports one measured approach from saved ready
+and jaw closure after joint/status and FK endpoint checks. It requires jaws
+already open. No correction trims, lift, return, sweep or drop are issued.
+Closure is a command rather than grasp confirmation. The operator's clearance
+confirmation does not imply an assistant-executed traversal; hardware execution
+of the new pickup sequence has not been observed. See `resume_hover.md` for
+execution and recording details.
+
+
+## Pickup low approach and late rotation reported
+
+The operator reported that pickup went too low and that the gripper continued
+rotating afterward. Three stationary, error-free samples were identical:
+[36.47, -21.53, -117.15, 43.94, -0.08, 160.22] degrees. The provisional pad
+reporter estimates (6.7917, 1.7286, 0.4413) inches at this snapshot, below even
+the model's nominal 1/2-inch finger-extension allowance. J4 is 1.7485 degrees
+below the planned target, outside the 1.5-degree completion tolerance. These
+samples alone do not show the earlier path, contact or whether closure occurred.
+
+The commanded J6 endpoint +161.63 differs from saved ready -135 by +296.63
+signed degrees. A single send_angles command does not establish simultaneous
+joint arrival or a fixed Cartesian gripper orientation. The pickup solver held
+J5/J6 and an arm-angle sum relative to old HOVER; it did not plan constant tool
+orientation throughout the approach. Do not wrap or substitute the J6 target
+without checking the tool offset and route.
+
+Local hardware pickup entry points are disabled before any queries or motion.
+The Pi remains unchanged until those files are transferred. No new target,
+return command, tolerance change or calibration correction was selected.
+
+
+### Operator confirmation of contact and actual XY
+
+The operator subsequently confirmed that the fingers touched the table, the
+jaws did not close, and the gripper was centered at mat (6, 2) inches. This is
+the observed contact outcome of the new pickup attempt; it supersedes the
+pre-execution status in the preparation section above. Compare this reported
+physical XY with the latest stationary-angle FK estimate (6.7917, 1.7286):
+predicted-minus-observed XY is approximately (+0.7917, -0.2714) inches,
+or (+20.11, -6.89) mm. This comparison assumes the physical observation refers
+to the same gripper midpoint and unchanged stopped configuration. It is not a
+full XYZ calibration sample: pad midpoint height and wrist flange center were
+not measured. Table contact must not be converted into an exact pad height
+using the approximate finger-extension measurement or modeled tilt.
+
+No jaw closure is consistent with the failed completion checks, but the
+pickup run output/trace is needed to establish the actual failure reason and
+joint timing. Table contact may have affected the reached angles; neither
+controller error 0 nor the stopped readback establishes an unobstructed route.
+Do not compensate with a blind +1-inch X shift or a global Z offset. The next
+calibration evidence should pair stationary angles with physical mat XYZ of
+the pad midpoint and actual robot flange center, without another pickup move.
+Pickup remains disabled locally. No recovery motion was commanded.
+
+
+### Measured pickup trace confirms staggered joint arrival
+
+The operator supplied the saved forward capture, preserved at
+[evidence/2026-11-18/pickup-forward-20261119T020112-981571Z.json](evidence/2026-11-18/pickup-forward-20261119T020112-981571Z.json).
+The UTC filename corresponds to the November 18 local session. The terminal
+prompt after the pasted JSON was excluded without altering the JSON data.
+The trace contains 169 samples over 22.069 seconds, maximum gap 0.183 seconds,
+and ends incomplete with failure `KeyboardInterrupt`.
+
+J1 through J5 reach within 0.5 degrees of their final recorded values and stay
+there by 4.940 seconds (individual times: J1 4.940, J2 0.937, J3 4.565,
+J4 1.850, J5 4.181 seconds). J6 is still at -6.94 degrees at 4.940 seconds,
+then advances to +160.22 by 11.274 seconds. Its actual recorded change is
+294.16 degrees from the initial -133.94. First stationary status after motion
+is at 11.429 seconds. Thus late wrist rotation is measured, not merely inferred
+from endpoint angles. At nominally the same speed setting, unequal joint
+travels did not result in coordinated joint arrival.
+
+The provisional closed-pad reporter estimates Z 0.496 inch at 4.940 seconds
+and a minimum sampled Z 0.4294 inch at 11.274 seconds; these are model estimates,
+not measured physical heights or a timestamp of table contact. The rotating
+off-axis pad reference also changes modeled XY while J6 continues rotating.
+The trace cannot establish when physical contact occurred or whether contact
+caused the J4 shortfall. Controller error remains zero in the captured samples.
+
+The capture continued stationary until Ctrl+C at about 22 seconds. J4's final
+1.7485-degree shortfall exceeds the 1.5-degree target check, so the approach
+never qualified for jaw closure; the polling loop had a 120-second deadline.
+This is consistent with the reported open jaws. One endpoint command was not
+a coordinated Cartesian approach. Correcting this requires both a validated
+pad/frame model near pickup and a reviewed trajectory coordinating orientation
+with descent; changing target offsets or wrapping J6 alone is not justified.
+No additional hardware motion was run and pickup execution remains disabled.
+
+
+### Operator reports unusual J2 give at stopped pickup pose
+
+The operator reports J2 resting at -21.26 degrees and being easily moved by
+hand to a reported -20.74 degrees, unlike the other joints. This is a
+0.52-degree reported-angle change. Power/holding state during this observation,
+release behavior, load and physical displacement were not supplied; no cause
+or hardware adjustment is established. Earlier stationary pickup J2 was
+-21.53, so this is a subsequent observation, not the same angle snapshot.
+
+Holding the other five joints at the last supplied stopped values
+[36.47, _, -117.15, 43.94, -0.08, 160.22], current provisional FK predicts
+that changing J2 from -21.26 to -20.74 moves the midpoint approximately
+(+1.056, +0.705, +1.570) mm, including +0.06182 inch in Z. This sensitivity
+is conditional on those other angles and model geometry, not a measured
+physical displacement. The Z change is about half the intended 1/8-inch
+nominal table margin. It does not explain the approximately one-inch observed
+X miss or the recorded staggered J6 arrival by itself. Pickup stays disabled;
+no torque, calibration, servo-release or motion settings were changed.
+
+
+### J2 follow-up: bounded give with servos engaged and table contact
+
+The operator confirmed the arm is powered with servos engaged. J2 remains at
+-21.26 degrees when untouched, can be lifted by hand to approximately -20.74,
+and returns to -21.26 after release. They describe boundaries beyond which
+it does not move without a command. This does not establish uncontrolled sag
+or inability to return to the commanded position. The operator also confirmed
+that the fingers are currently touching the table. Contact can influence the
+resting configuration, so this sample is not a free-space commanded-versus-
+settled calibration measurement.
+
+The requested next task is J2 characterization. Establish a fresh full-angle,
+stationary, error-free baseline before choosing a single J2-only lift. Measure
+commanded-versus-settled response after table contact is removed, without hand
+pressure or wrist/gripper commands. No automatic pickup, compensation, joint
+parameter adjustment, or recovery motion has been enabled or executed.
+
+
+### J2 command-response observations and manual diagnostic reporting
+
+The operator commanded J2 +2.00 from -19.68 at speed 10; reported J2 stopped
+at +0.61 (reported-minus-requested error -1.39 degrees). A subsequent command
+from +0.61 to -19.00 at speed 10 stopped at -19.59 and remained there over
+repeated P reads (error -0.59). The local +0.60 compensation trial commanded
+-18.40 from -19.59, also at speed 10, but neither visible movement nor reported
+angle change occurred. Subsequent P still read -19.59, a -1.19-degree error.
+No constant compensation or specific deadband threshold is established.
+
+Inspection found the generic move_joint wait uses the existing 3-degree pose
+tolerance, so an unchanged position 1.19 degrees away can satisfy its three
+stationary-read completion check. This explains why the application returned
+to the menu, not why the actuator did not move. Do not attribute the physical
+nonresponse to that completion check without more evidence.
+
+The manual controller now prints requested/reported angles, signed error,
+reported change and the existing tolerance, and explicitly flags no reported
+movement. It sends no additional motion or correction. Q at the desired-angle
+prompt now cancels without trying to parse a number. Motor settings, target
+tolerances and hardware command behavior were not changed. Pickup remains
+disabled locally; no further J2 movement was commanded by the assistant.
+
+
+### J2 larger upward request reaches only -19.16
+
+From -19.59 the operator commanded J2 -17.50 at speed 10. Reported J2 moved
++0.43 degrees to -19.16 and stayed there on the subsequent P read. The final
+reported-minus-requested error is -1.66 degrees; the commanded change was
++2.09 degrees. Other reported joints remained [36.65, _, -117.59, 44.47,
+0.08, 160.75]. This is additional evidence against adopting a constant +0.5
+or +0.6 correction. It does not establish an exact servo deadband, weak motor,
+mechanical fault or firmware cause.
+
+The next diagnostic is read-only comparison of raw servo control registers.
+The manufacturer pymycobot v4.0.6 demo reads addresses 7, 21, 22, 23, 24, 26,
+27 via get_servo_data. Its write and power-on sections must not be invoked for
+this diagnostic. Reference:
+https://github.com/elephantrobotics/pymycobot/blob/v4.0.6/demo/pid_read_write.py
+and the read API implementation:
+https://github.com/elephantrobotics/pymycobot/blob/v4.0.6/pymycobot/generate.py
+Raw values from other joints are comparison data, not approved J2 defaults.
+No servo settings or motion behavior were changed.
+
+
+### Read-only control parameter capture
+
+The operator supplied raw addresses [7,21,22,23,24,26,27] with these values:
+J1 [0,15,20,0,0,3,3]; J2 [0,32,8,0,0,3,3];
+J3 [0,32,8,0,0,3,3]; J4/J5/J6 [0,25,25,0,0,3,3].
+Initial and final reported angles were identical:
+[36.65,-19.16,-117.59,44.47,0.08,160.75].
+J2 and J3 match, including the manufacturer's example parameter array; this
+is not proof of correct factory values, adequate holding torque, or absence
+of a mechanical issue. The raw 3 values must not be interpreted as degrees.
+No register writes, power changes, or motion commands were made.
+
+SDK v4.0.6 exposes read-only get_angles_plan, get_fresh_mode,
+is_servo_enable and get_encoder queries. The next diagnostic compares their
+raw replies with actual angles. The SDK describes get_angles_plan only as
+angle-plan data; its exact relationship to the last commanded endpoint on
+firmware 7.3 must not be assumed. The parameter documentation located for
+another 280 variant contains inconsistent integral/derivative descriptions,
+so it does not justify tuning this unit's gains. No gains were changed.
+
+
+### Controller angle plan matches the J2 request, but actual J2 remains short
+
+The operator's next read-only capture returned actual angles
+[36.65,-19.16,-117.59,44.47,0.08,160.75], angle-plan reply
+[37.28,-17.5,-117.11,45.68,0.08,161.63], refresh mode 1, J2 enabled 1,
+and raw J2 encoder 2266. The angle-plan J2 entry matches the -17.50 request,
+while reported actual J2 remains 1.66 degrees below it. This supports receipt
+of the target by the controller; it does not establish the cause of poor
+tracking. No raw-encoder output-angle conversion or servo-register tuning
+was assumed. See [consolidated J2 diagnostic report](j2_diagnostic_report.md)
+for the command-response table, raw settings and model-specific service
+questions. No further motion or parameter changes were made.
+
+
+### Subsequent HOVER sample: measured height and ambiguous pointing direction
+
+The operator ran the original continuous HOVER from actual ready
+[-89.12,1.4,-0.52,-0.79,89.2,-133.5]. The recorded final angle snapshot was
+[33.92,-13.35,-93.95,12.83,0.52,160.48]. The run reported completion within
+joint tolerance and saved forward-20261119T030643-478818Z.json on the Pi;
+that trace has not been supplied locally. The nominal pad reporter estimates
+(7.315,1.769,2.359) inches at these actual angles. The operator had described
+the physical pad center as slightly over 2.25 inches high and subsequently
+said the angled gripper points toward (6.5,2). That pointing coordinate is
+not established as the vertical projection of the gripping-pad midpoint.
+Do not use it as a physical XY calibration sample or add a +0.5-inch correction.
+
+Current nominal flange +Z is about 4.50 degrees from downward at this angle
+snapshot (a flange-model result, not a measured gripping-finger orientation).
+Joint tolerance does not verify pad XYZ or orientation. The next local target
+requires an unambiguous physical pad-midpoint XY observation; wrist orientation
+and translational alignment must not be conflated. No new hardware movement
+or target adjustment was issued for this observation.
+
+
+### Physical hover midpoint confirmed over (7,2); local orientation test prepared
+
+The operator clarified that the pad midpoint is vertically above mat (7,2),
+while the gripper is tilted toward (6.5,2). This supersedes treating the aiming
+point as physical midpoint XY. With actual hover angles
+[33.92,-13.35,-93.95,12.83,0.52,160.48] and midpoint slightly above 2.25
+inches, XY is already physically aligned. The model's XY (7.315,1.769) is not
+a reason to shift the observed physical midpoint toward model (7,2).
+
+A separate local high-hover orientation candidate preserves that snapshot's
+MODELED midpoint, holds signed J6 at 160.48, and solves for downward nominal
+flange +Z. Candidate: [34.3843,-7.6479,-104.5846,22.2325,0,160.48]. The
+model predicts less than 0.01-degree flange tilt and less than 0.01 mm endpoint
+midpoint change. This is an intended local correction, not a guarantee of
+physical verticality or preserved physical XYZ given tracking/calibration error.
+
+Independent progress sampled at [0,.25,.5,.75,1] for J1-J5 with J6 fixed gives
+minimum nominal pad height about 1.325 inches. The path may dip even though
+endpoint height is preserved; remove the block and clear the local sweep.
+This sampling is not continuous collision verification. No new hardware run
+has been observed. Existing low pickup and return stay disabled.
+
+`python3 -m bucke_arm.hover_alignment` previews the candidate. `--execute`
+performs one all-joint endpoint command at speed 5 only from the exact recorded
+high-hover neighborhood (0.5-degree tolerance, three stable stationary reads,
+live limit checks and start recheck). It records direction `high_hover_alignment`,
+requires three stationary samples within 1.5 degrees in 20 seconds, and stops
+on failure/interruption. It never closes the jaws or adds corrective commands.
+Final output reports actual-angle model tilt and midpoint drift for comparison;
+physical midpoint and finger orientation must still be checked before descent.
+
+
+### Alignment refused before movement; checkpoint refreshed from three samples
+
+The alignment command refused at the starting-pose guard and did not produce
+a forward-recording message or issue the alignment move. Readback was
+[34.27,-13.35,-93.95,13.0,-0.35,160.66]. The operator then supplied three
+identical stationary, error-free samples of those angles, with zero servo
+status. Relative to the earlier checkpoint, J5 changed by -0.87 degrees,
+exceeding the existing 0.5-degree entry tolerance. This is a between-snapshot
+change, not evidence of drift during the latest three stationary samples.
+
+The alignment module now uses that explicitly supplied stable checkpoint and
+recalculates the nominal midpoint-preserving vertical-flange candidate:
+[33.9587,-8.2415,-103.8620,22.1035,0,160.66]. J6 remains at its new measured
+160.66. The 0.5-degree entry tolerance and 0.25-degree starting-stability check
+were retained. Offline independent-progress sampling on five levels gives
+minimum nominal midpoint height 1.3879 inches; no continuous physical-clearance
+guarantee is implied. The block must remain out for the local alignment test.
+All 133 tests passed locally, including refusal from the superseded checkpoint.
+The hardware alignment itself has still not been observed.
+
+
+### Physical post-alignment anchor and raised approach trial prepared
+
+The operator observed the post-alignment pad center at (6 5/8,1 3/4) inches
+and a little straighter. They initially reported height 3 inches, then
+explicitly corrected it to 2 inches. Pair (6.625,1.75,2.0) with the latest
+recorded stopped joints [34.18,-9.66,-104.23,20.47,-0.08,160.66].
+
+The requested raised point is (7,2,1.625), so use measured relative motion
+(+0.375,+0.25,-0.375) inches rather than another absolute model target.
+A one-command local trial with bounded direction-specific feedforward was
+prepared as documented in resume_hover.md. This is a trial, not established
+J2 calibration. Independent progress sampled at five levels for J1-J5 gives
+minimum nominal pad height 1.2506 inches to the precompensated command;
+this is not continuous swept-volume verification and the block stays out.
+J6 is unchanged, low pickup/return remain locked, and no new hardware run has
+been observed. No servo parameters or kinematic calibration were changed.
+
+
+### Local approach refused before movement; live start within observed region
+
+The operator's local approach was refused before transmission at
+[34.27,-9.66,-104.23,21.0,-0.52,159.96]. J4 differs +0.53 degrees and J6
+-0.70 from the prior post-alignment sample, so the 0.5-degree fixed gate failed.
+No new local approach recording or motion was reported. Rather than rewriting
+one snapshot again, the local approach now captures a stable live pose inside
+the explicit box spanning these two supplied observations with 0.25-degree
+padding. It retains fault/stationarity, 0.25-degree stability, repeated start
+validation and live limit checks. The measured physical anchor stays paired
+with its original angles; the candidate is recalculated holding live signed J6.
+
+All 142 local tests passed, including acceptance of the newer observed pose,
+refusal of unrelated or unstable poses and changes during limit checks, and
+verification that live J6 and the fixed measured-relative XYZ goal are preserved.
+This is tested software behavior, not a successful physical positioning run.
+No further hardware movement or setting change has been observed.
+
+
+### Local raised approach arrived with close J2/J4 tracking
+
+The operator executed the live-start local approach. Captured start was
+[34.27,-9.66,-104.23,21,-0.52,159.96]. Executed command was
+[34.2137,-13.3825,-107.9675,33.942,0,159.96]; intended reported angles were
+[34.2137,-13.9725,-108.3355,32.308,0,159.96]. Final actual angles:
+[34.27,-14.06,-108.36,32.34,-0.52,159.96]. The run reported arrival within
+joint tolerance and saved forward-20261119T033411-539397Z.json on the Pi.
+The underlying trace has not been supplied locally.
+
+J2 reported-minus-desired error is -0.0875 degrees and J4 error +0.032.
+The local anchored midpoint estimate is (7.023,1.953,1.609) inches and nominal
+flange tilt 0.526 degrees. This supports the bounded feedforward trial at this
+specific configuration/direction, not general correction values for all poses.
+Actual physical endpoint, finger orientation and block clearance still need
+confirmation. No jaws or return were commanded. The target pad height is above
+the one-inch block, so this is a raised approach and not a grasp. A structured
+observation is saved in config/raised_approach.observed.json; it is not loaded
+automatically as a route. No new descent or ready-to-approach path was enabled.
+
+
+### Physical raised approach confirmed; short descent/closure step prepared
+
+The operator confirmed that the jaws are centered over the block and almost
+straight down, with the lowest fingertip overlapping the block slightly.
+This physically confirms the local approach's alignment, not its printed
+absolute height. No exact pad height was measured at this endpoint. Actual
+joints were [34.27,-14.06,-108.36,32.34,-0.52,159.96].
+
+A separate grasp step now plans a relative 0.25-inch descent from a stable
+live pose near that physically verified configuration. It preserves current
+nominal XY, bend, J5 and J6. Reference desired angles are
+[34.27,-16.031,-110.2681,36.2191,-0.52,159.96]; the same bounded directional
+trial offsets yield command
+[34.27,-15.441,-109.9001,37.8531,-0.52,159.96]. Independent joint progress
+sampled at five levels predicts at most 0.3417-inch pad lowering toward that
+command, not a physical continuous-clearance guarantee.
+
+The step sends one command, records actual motion, then requires stationary
+fault-free arrival and relative FK checks (XY drift <=0.125 inch, lowering
+0.125-0.375 inch, nominal flange tilt <=2 degrees) before closure. It commands
+closure only, with no sensed grasp confirmation, lift, return or sweep. The
+old ready-to-low-pickup entry point remains disabled. Hardware execution of
+this new short descent/closure step has not yet been observed.
+
+
+### Local grasp and J2 lift physically confirmed
+
+The operator executed `grasp --execute`. Captured start was
+[34.18,-13.97,-108.36,32.95,-0.52,160.22]; final actual joints after the
+quarter-inch descent were [34.27,-15.90,-110.39,36.73,-0.35,160.22].
+The program reported descent checks passed and jaw closure commanded, saving
+forward-20261119T034038-546219Z.json on the Pi. The operator supplied two
+photos and clarified that the closed-jaw photo is the after image. A secure
+lift was not inferred from photos alone.
+
+With jaws kept closed, the operator made two J2-only manual lift commands at
+speed 5. Command -12.00 from -15.90 reached -13.62, with final pose
+[34.10,-13.62,-110.39,37.17,-0.52,160.04]. The block stayed in the jaws,
+but one corner was barely touching or clearance was uncertain. Command -10.00
+then reached -11.60, with three-dimensional configuration
+[34.18,-11.60,-110.39,37.17,-0.61,160.04], repeated unchanged by P. The
+operator explicitly confirmed the block was fully off the table. This is a
+physically demonstrated local grasp/lift at the pickup location.
+
+The final requested-minus-reported J2 difference is 1.60 degrees; actual -11.60
+is the observed held pose, not commanded -10.00. Printed pad estimate
+(7.85,1.99,2.05) inches is nominal FK output, not measured physical XYZ.
+The record is saved in config/pickup_sequence.observed.json. No sweep/drop has
+been performed. The two observed lift steps have not yet been combined and
+executed as one lift. Direct ready-to-grasp motion and automatic return remain
+unverified/disabled; this success must not unlock the earlier contact route.
+
+
+### J1 sweep and landing physically confirmed
+
+At speed 5 with the block lifted, the operator commanded J1 70,75,90,91.
+Actual J1 endpoints were 69.25,74.17,89.03,90.08. Last pose, repeated by P:
+[90.08,-11.60,-110.39,37.17,-1.14,160.04]. The operator reported the block
+landed about mat (2.5,7), rather than the initially requested (2,7). Landing
+is the operator's physical observation; the supplied transcript does not show
+the O release command. Nominal XYZ (2.59,7.49,2.05) is not the measured landing.
+The observed pickup/lift/sweep/drop is saved in pickup_sequence.observed.json.
+
+A combined `pick_and_place` routine is prepared from the physically verified
+raised pickup pose only. It opens jaws, runs the existing guarded quarter-inch
+descent and closure, waits for valid gripper-stopped replies with a two-second
+minimum, then commands one J2 -10 lift and one J1 91 sweep before release.
+The single joint intervals are the same monotonic intervals covered by the
+manual steps, but this combined sequence has not been hardware-tested.
+Gripper polling is supported by SDK 4.0.6 but has not yet been observed on this
+unit. It aborts on invalid replies or timeout rather than lifting blindly.
+
+All future target limits are preflighted before any command. Lift must reach
+J2 within 0.4 degrees of the observed -11.6 and show nominal rise >=0.5 inch
+before sweep. Drop checks J1 near observed 90.08 and nominal height retention
+before release. Failure requests stop without automatic return or retry. The
+ready/drop pose is rejected before opening jaws. No direct ready-to-pickup,
+low contact route or automatic recovery is enabled by this routine.
+
+
+### Staged return to saved READY prepared at the operator's request
+
+The operator requested return to the saved READY pose and suggested rotating
+J6 to -135 before the remaining reset. The target was explicitly clarified
+as READY [-90,0,0,0,90,-135], not the raised pickup pose. A signed J6 move
+from the recorded drop +160.04 to -135 is -295.04 degrees.
+
+Offline screening found that J6-first then a direct all-joint ready reset can
+place the provisional tool envelope 23.4 mm below the mat if J4 resets before
+J3 rises. A staged proposal instead raises J2 to 0, sets J6 -135, raises J3
+to 0, resets J4 to 0, sets J5 90, then turns J1 to -90. Nominal sampled
+tool/table heights remain positive as documented in resume_hover.md, but the
+provisional cylinder does not model arm self-contact and actual full swept
+clearance has not been established.
+
+The new `return_ready --execute` is a supervised initial traversal: confirmed
+empty/open jaws and local Enter confirmation before every single-joint stage.
+It retains whole-route limits, stable start/checkpoint checks, motion/error
+polling, actual trajectory recording, cancellation and stop-on-failure.
+No automatic retry or return from an arbitrary pose is enabled. The old direct
+hover return stays disabled. `pick_and_place --return-ready` offers this same
+supervised return after release. No hardware execution of the new return has
+been observed; software tests and simulation are distinct from physical proof.
+
+
+### Operator confirmed staged return; J6 speed increased by request
+
+The operator reported the new staged drop-to-READY return worked perfectly.
+No return telemetry or trace files were pasted, so this is physical completion
+confirmation without a new exact final-angle snapshot. The observed return
+used speed 5 for all stages. The operator requested only J6 to -135 be changed
+to speed 10. The route, other stage speeds, confirmation pauses, limits,
+starting-state, completion and stop checks remain unchanged.
+
+Return J6 now uses speed 10; J2/J3/J4/J5/J1 remain 5. Preview and stage prompts
+show the actual per-stage speeds. Recorded trajectory JSON stores the actual
+commanded speed, including 10 for return stage 2. The faster J6 variant has
+not yet been observed on hardware; its authorization comes from this explicit
+operator request. The old direct hover return remains disabled.
+
+
+### Full READY-to-READY entry point prepared
+
+After confirming the return and requesting J6 speed 10, the operator requested
+the whole sequence from the top. `full_cycle` now composes the demonstrated
+high HOVER, taught transfer, measured raised approach, grasp/lift/sweep/drop,
+and supervised return. This full combined hardware run has not been observed.
+Block placement is deferred until the raised approach, reproducing the observed
+setup rather than passing the initial high sweep over an untested block.
+
+The taught transfer uses observed command
+[33.9587,-8.2415,-103.862,22.1035,0,live_J6] and expected settled checkpoint
+[34.18,-9.66,-104.23,20.47,-0.08,live_J6]. The actual live checkpoint is
+validated before the existing measured-reference local approach. The original
+standalone guards remain; this pipeline owns its prior phase's validated pose
+instead of failing on an exact stale hardcoded snapshot. It does not retry or
+introduce an unverified direct low READY-to-pickup route. Local placement and
+staged return confirmations remain. All future reference limits are preflighted
+before the initial open command. No hardware was moved by the assistant.
+
+
+### First full cycle reached raised approach; signed J5 guard fixed
+
+The operator ran full_cycle from READY. High HOVER reached
+[34.01,-13.35,-93.95,12.91,0.79,160.4], the taught checkpoint reached
+[34.18,-9.66,-104.23,20.47,0.7,160.4], and the local raised approach reached
+[34.18,-14.06,-108.36,32.34,0.7,160.4]. It then refused at the grasp-start
+gate before block-placement confirmation, descent or closure. Three subsequent
+pi_status samples were identical, stationary, error-free and all servo status
+entries zero. Pi traces are forward-20261119T041451-153072Z.json,
+forward-20261119T041453-531052Z.json and forward-20261119T041456-000397Z.json;
+the files themselves have not been supplied locally.
+
+The fixed angular comparison rejected J5 +0.70 because it differed 1.22 degrees
+from the historical -0.52 sample. At the new actual pose, nominal flange tilt
+is 0.705 degrees and nominal midpoint change from the verified raised reference
+is (-0.0652,+0.1063,+0.0090) inches. Both satisfy the existing 2-degree tilt
+and 0.15-inch per-axis position gates. The grasp gate now bounds other joints
+as before and evaluates J5 using those unchanged geometric conditions, rather
+than a signed difference from one negative reading. No motion/arrival tolerance
+or descent distance was changed.
+
+The empty-gripper drop entry also now uses absolute near-zero J5 <=2 degrees
+rather than its old signed difference from -1.14. Other observed drop bounds
+are unchanged. This prevents the same valid positive-J5 condition from causing
+a later return refusal. New tests replay the supplied positive-J5 observations
+through the full mocked cycle, retaining wrong-pose, excessive-tilt, shift,
+fault and cancellation rejection. All 175 tests pass locally. The remainder
+can resume with pick_and_place --execute --return-ready from the present raised
+pose after physical block placement/alignment confirmation; no return to READY
+or repeated initial approach is needed. A complete hardware cycle is still
+unconfirmed, and no new motion was run by the assistant.
+
+
+### Subsequent full run closed on block; gripper-wait timeout
+
+The operator's next full run reached raised pose
+[34.1,-13.97,-108.45,32.34,0.61,160.57], accepted block placement, ran the
+quarter-inch descent, and then stopped with "Gripper did not settle" before
+any lift. The grasp trace on the Pi is forward-20261119T042619-908090Z.json.
+A subsequent read-only probe returned actual pose
+[33.92,-16.08,-110.12,36.56,-0.96,160.57] and five identical adaptive-gripper
+readings moving=0, value=54. This proves stable partial position after stopping,
+not the exact motion-flag behavior during the failed wait. Stop handling may
+have changed the flag. No further motion was issued during the probe.
+
+Loaded closure waiting now reads adaptive gripper position as well as motion
+status. After at least two seconds it accepts stopped replies, or a valid
+partial position (0<value<95) stable within one unit for at least one second.
+Opening retains the stopped-flag requirement. Invalid replies, persistently
+open closure, changing position, faults or timeout abort with the last raw
+moving/value fields. Stable contact is not object identity or force sensing.
+No torque, calibration, power or actuator settings changed.
+
+`pick_and_place --execute --resume-grasp --return-ready` now offers an explicit
+held-block resume. It requires the known stable post-grasp pose and local
+confirmation that the block remains between the jaws. It preflights lift and
+sweep targets, checks closure telemetry, then runs the existing lift/sweep/drop
+and staged return. There is no initial open, new closure or descent; this
+prevents a restart from dropping the already-held block. Ready and drop starts
+refuse before movement. The new resume and loaded wait have software tests,
+but their physical execution has not yet been observed. All 181 tests passed.
+
+The preceding subdegree J3 handoff refusal was also corrected locally: approach
+arrival and grasp/drop entry use shared 1.5-degree joint bounds, while the
+existing 0.15-inch midpoint gate and 2-degree near-vertical gate remain. The
+midpoint reference is the same measured-anchor goal as the approach, rather
+than one incidental historical actual-angle point. New exact-pose full-cycle
+tests cover both of the operator's latest observations and the later return.
+
+
+### Operator confirmed resumed sequence; return prompts removed, J5/J1 paired
+
+The operator reported "Everything looked good" after the held-grasp resume,
+then requested that return need no confirmation and J5/J1 be synchronous.
+No new terminal telemetry was supplied with this physical success report.
+This supports the resumed lift/drop/return completion; it is not a transcript
+of one uninterrupted READY-to-READY run or proof of the new paired finish.
+
+Default return now has five stages: J2->0, J6->-135 at speed 10, J3->0,
+J4->0, then one all-joint READY command setting J5=90 and J1=-90 together at
+speed 5. The other four setpoints remain their existing READY goals. Both axes
+are issued in one command; exact simultaneous arrival is not claimed. All
+preflight/start/limit/status/completion checks and trajectory recording remain.
+Optional callback/--step is diagnostic only; no default return input is requested.
+Full-cycle block placement still requires the existing local physical check.
+
+New tests verify no default return prompt, exactly one paired final command,
+retained speed profile, correct setpoints despite prior following error,
+preflight rejection of paired targets, and stop on paired-stage fault. All 186
+tests pass locally; Python 3.8 syntax and fake full cycle also pass. The paired
+return itself has not yet been physically observed. No hardware was moved by
+the assistant, and the earlier direct-return lockout remains.
+
+
+### Mid-cycle block placement removed by explicit request
+
+The operator reported the latest cycle worked, then requested not having to
+place the block during execution. The full-cycle CLI now selects the
+pre-positioned-block callback by default and says to put the block at (7,2)
+before starting. It continues only after the existing raised-pose checks;
+no motion target, trajectory, controller parameter or completion gate changed.
+Return is still automatic with J5/J1 paired and J6 speed 10.
+
+The old placement prompt remains only under --place-at-pickup. New tests prove
+the default has no operator input through the cycle, preserve the optional
+manual callback, and retain all earlier fault/pose/cancellation tests. All 188
+tests pass locally. The first approach past a pre-positioned block has not yet
+been physically observed; the prior approach was block-out. No new hardware
+motion was executed by the assistant. This does not provide feeding, repeated
+cycles or object-presence sensing.

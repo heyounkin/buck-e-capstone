@@ -3,6 +3,7 @@
 import argparse
 
 from .arm import READY_ANGLES, RealArm, _pose
+from .kinematics import gripper_midpoint_mat
 
 INITIAL_HOVER = (34.68, -4.11, -103.13, 17.24, 0.0, 162.84)
 LIFT = (33.66, -2.13, -90.41, 0.35, 0.08, 161.63)
@@ -76,6 +77,15 @@ def return_route(current=None):
             for step, index in enumerate(range(last, -1, -1), 1)]
 
 
+def print_hover_estimate(angles):
+    """Report the current FK using an explicitly identified angle snapshot."""
+    xyz = tuple(value / 25.4 for value in gripper_midpoint_mat(angles))
+    print("FK joint snapshot (degrees):", tuple(angles))
+    print("Provisional closed-pad midpoint (mat inches): X=%.3f, Y=%.3f, Z=%.3f" % xyz)
+    print("Offset from pickup (7, 2) inches: dX=%+.3f, dY=%+.3f" % (xyz[0] - 7, xyz[1] - 2))
+    print("Estimate uses the closed-pad reference even with jaws open; open-finger clearance is not modeled.")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true",
@@ -86,6 +96,8 @@ def main(argv=None):
                         help="Retired hover return option (disabled after reported contact)")
     parser.add_argument("--synchronous", action="store_true",
                         help="Use sync_send_angles for each all-joint waypoint")
+    parser.add_argument("--waypoints", action="store_true",
+                        help="Explicitly replay the historical staged approach without final trims")
     parser.add_argument("--continuous", action="store_true",
                         help="Send one forward command and record the measured joint trajectory")
     parser.add_argument("--preview-reverse", metavar="RECORDING.json",
@@ -106,19 +118,23 @@ def main(argv=None):
         print("Duration:", reverse[-1]["elapsed_s"], "seconds")
         print("Preview only. Hardware return remains disabled pending trajectory review.")
         return 0
+    if args.continuous and (args.waypoints or args.resume_lift3 or args.synchronous):
+        parser.error("--continuous cannot be combined with waypoint or recovery options")
+    continuous = not (args.waypoints or args.resume_lift3 or args.synchronous)
     if args.to_ready:
         print("Return disabled after reported gripper-to-arm contact. "
               "The previous forward path was not recorded; a measured trace is required.")
         return 1
     print("Saved ready:", READY_ANGLES)
     print("Corrected hover target:", HOVER)
+    print_hover_estimate(HOVER)
     print("Previous observed endpoint:", LAST_READBACK)
-    if not args.continuous:
+    if not continuous:
         print("%d waypoints, speed 5; final tolerance 1.5 degrees."
               % len(route(resume_lift3=args.resume_lift3)))
     if args.resume_lift3:
         print("Required stopped pose:", LIFT3_READBACK)
-    if args.continuous:
+    if continuous:
         print("One forward endpoint command, speed 5; measured joint-path recording enabled.")
     elif args.synchronous:
         print("Synchronous SDK waypoint calls; application fault polling pauses during each call.")
@@ -135,9 +151,10 @@ def main(argv=None):
             print("Cancelled.")
             return 0
         arm.move_to_hover(resume_lift3=args.resume_lift3, synchronous=args.synchronous,
-                          continuous=args.continuous)
-        print("Hover reached within tolerance. Check jaw midpoint over (7, 2) inches.")
-        print("Leave the cube out. Next: side view along mat Y to check flange tilt.")
+                          continuous=continuous)
+        print("Hover reached within joint tolerance; no corrective commands sent.")
+        print_hover_estimate(arm.get_angles())
+        print("Leave the cube out. Verify midpoint and tilt before planning pickup descent.")
         return 0
     except (RuntimeError, ValueError, OSError) as exc:
         print("Stopped:", exc, flush=True)

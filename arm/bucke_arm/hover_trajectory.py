@@ -7,14 +7,19 @@ from pathlib import Path
 from .arm import READY_ANGLES, _pose
 
 
-def save_forward_trace(samples, complete, failure=None):
+def save_forward_trace(samples, complete, failure=None, *, direction="ready_to_hover",
+                       command_angles=None, arrival_angles=None, speed=5):
     """Keep each run separately, including failed captures for diagnosis."""
     directory = Path("hover_trajectories")
     directory.mkdir(exist_ok=True)
     name = datetime.now(timezone.utc).strftime("forward-%Y%m%dT%H%M%S-%fZ.json")
     path = directory / name
-    payload = {"schema": 1, "direction": "ready_to_hover", "complete": complete,
-               "speed": 5, "samples": samples, "failure": failure}
+    payload = {"schema": 1, "direction": direction, "complete": complete,
+               "speed": speed, "samples": samples, "failure": failure}
+    if command_angles is not None:
+        payload["command_angles_deg"] = list(_pose(command_angles))
+    if arrival_angles is not None:
+        payload["arrival_angles_deg"] = list(_pose(arrival_angles))
     # Exclusive creation prevents overwriting another session's evidence.
     with path.open("x", encoding="utf-8") as stream:
         json.dump(payload, stream, indent=2, allow_nan=False)

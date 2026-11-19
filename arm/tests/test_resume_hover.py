@@ -64,8 +64,11 @@ class HoverTests(unittest.TestCase):
         self.assertEqual(client.sync_send_angles.call_count, 1)
 
     def run_arm(self, client, **kwargs):
+        # The Pi runs Python 3.8, which predates dictionary union operators.
+        options = {"continuous": False}
+        options.update(kwargs)
         with patch('bucke_arm.arm.time.sleep'), contextlib.redirect_stdout(io.StringIO()):
-            return RealArm(client).move_to_hover(**kwargs)
+            return RealArm(client).move_to_hover(**options)
 
     def test_resume_retries_lift3_then_only_remaining_route(self):
         client = self.client()
@@ -128,22 +131,47 @@ class HoverTests(unittest.TestCase):
         self.assertEqual(client.send_angles.call_count, 1)
         client.stop.assert_called_once()
 
-    def test_trim_is_bounded_and_stops_if_stalled(self):
+    def test_endpoint_error_stops_without_trim(self):
         client = self.client()
         def move(angles, speed):
             actual = list(angles)
-            if client.send_angles.call_count >= 48:
-                actual = list(HOVER)
+            if client.send_angles.call_count == 48:
                 actual[3] -= 1.8
             client.get_angles.return_value = actual
         client.send_angles.side_effect = move
-        with patch('bucke_arm.arm.time.monotonic', side_effect=count(step=0.5)), \
-                self.assertRaisesRegex(RuntimeError, 'Timed out at Hover trim'):
+        with self.assertRaisesRegex(RuntimeError, 'Unexpected starting pose'):
             self.run_arm(client)
-        self.assertEqual(client.send_angles.call_count, 49)
-        target = client.send_angles.call_args.args[0]
-        self.assertAlmostEqual(target[3] - HOVER[3], 0.5)
+        self.assertEqual(client.send_angles.call_count, 48)
         client.stop.assert_called_once()
+
+    def test_default_hover_is_one_recorded_command(self):
+        client = self.client()
+        def send(angles, speed):
+            client.get_angles.return_value = list(angles)
+            return 1
+        client.send_angles.side_effect = send
+        with patch('bucke_arm.arm.time.sleep'), patch('bucke_arm.hover_trajectory.save_forward_trace') as save:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertTrue(RealArm(client).move_to_hover())
+        client.send_angles.assert_called_once_with(list(HOVER), 5)
+        client.sync_send_angles.assert_not_called()
+        self.assertTrue(save.call_args.args[1])
+
+    def test_continuous_shortfall_stops_without_correction(self):
+        client = self.client()
+        def send(angles, speed):
+            actual = list(angles)
+            actual[3] -= 1.8
+            client.get_angles.return_value = actual
+            return 1
+        client.send_angles.side_effect = send
+        with patch('bucke_arm.arm.time.monotonic', side_effect=count(step=10)), \
+                patch('bucke_arm.hover_trajectory.save_forward_trace') as save:
+            with self.assertRaisesRegex(RuntimeError, 'timed out'):
+                self.run_arm(client, continuous=True)
+        client.send_angles.assert_called_once_with(list(HOVER), 5)
+        self.assertFalse(save.call_args.args[1])
+        self.assertTrue(client.stop.called)
 
     def test_cancel_closes_without_movement(self):
         client = self.client()

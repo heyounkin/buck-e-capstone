@@ -68,6 +68,24 @@ class JointControlTests(unittest.TestCase):
                          [(1, 25, 10), (1, 35, 10)])
         self.assertNotIn("Type MOVE", output)
 
+    def test_small_unchanged_command_reports_error_without_retry(self):
+        client = client_at_standby()
+        client.get_angles.return_value = (36.65, -19.59, -117.59, 44.47, 0.08, 160.75)
+        client.send_angle.side_effect = None
+        output = self.run_menu(client, ["2", "-18.40", "Q"])
+        client.send_angle.assert_called_once_with(2, -18.40, 10)
+        self.assertIn("error (reported - requested)=-1.19 degrees", output)
+        self.assertIn("Reported change from start: +0.00 degrees", output)
+        self.assertIn("No reported joint movement detected", output)
+        self.assertIn("3.0-degree pose tolerance", output)
+
+    def test_q_at_target_cancels_without_motion(self):
+        client = client_at_standby()
+        output = self.run_menu(client, ["2", "q", "Q"])
+        client.send_angle.assert_not_called()
+        self.assertIn("Joint command cancelled", output)
+        self.assertNotIn("could not convert", output)
+
     def test_xyz_uses_final_readback_after_motion(self):
         client = client_at_standby()
         actual = (34.1,) + STANDBY_ANGLES[1:]

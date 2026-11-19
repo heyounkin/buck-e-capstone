@@ -1,5 +1,11 @@
 # Buck-E arm
 
+**Pickup execution disabled:** after the reported low approach and late gripper
+rotation, `pickup --execute` and `RealArm.pick_up_block` refuse before hardware
+queries or movement. Earlier execution instructions below are historical.
+Offline target previews remain available; do not rerun the Pi pickup code.
+
+
 The arm runs on a myCobot 280 Pi with Python 3.8.10, pymycobot 4.0.6 and
 pyserial 3.5. Laptop commands and tests use the Python standard library, with
 Matplotlib needed for the optional workspace plot.
@@ -185,7 +191,13 @@ The preview runs offline.
 The hover tool is separate from the saved R/S transitions. The operator reported
 gripper-to-arm contact during direct hover return on November 5, 2026. The
 hardware return is locked out. The [hover guide](docs/resume_hover.md) covers the
-forward route, measured trajectory capture, and offline reverse preview.
+default single-command forward motion without correction trims, updated FK
+endpoint reporting, measured trajectory capture, and offline reverse preview.
+`python3 -m bucke_arm.pickup` previews the grasp for the one-inch block at
+(7, 2). With physical clearance confirmed, `--execute` performs one approach
+from saved ready to a 5/8-inch pad-midpoint height, verifies arrival, then
+commands jaw closure. Begin with jaws already open; see the hover guide for
+setup. The arm remains at grasp height; the later lift/sweep/drop is deferred.
 
 ## Tests and project records
 
@@ -202,12 +214,57 @@ Tests use simulated arms and SDK fixtures. Generated capture files in
 - [Workspace validation](docs/workspace_validation.md) for frame and clearance estimates.
 - [Standby planning notes](docs/standby_plan.md) for early experiments and their evidence.
 
+## One full cycle
+
+Place the one-inch block at (7,2) before starting from saved READY.
+`python3 -m bucke_arm.full_cycle` previews; `--fake` replays checkpoints without
+hardware. `--execute` runs once without placement or return prompts, using the
+same checked approach/grasp/lift/sweep/drop motions. Return J6 uses speed 10;
+other arm stages use 5, with J5/J1 issued together at the end of the return.
+`--place-at-pickup` retains the old manual insertion pause if needed.
+
+The first approach with the block already present still needs physical
+verification; the previously demonstrated approach was block-out. Watch for
+unintended contact before grasping. No block detection, feeder or automatic
+repeat is added. See the hover guide for checks and observed phase details.
+
+## Return from drop
+
+`python3 -m bucke_arm.return_ready` previews the checked return from the observed
+empty-gripper drop pose. `--execute` advances without confirmations: raise J2,
+set J6 to -135 at speed 10, reset J3/J4, then move J5/J1 together in one final
+READY command at speed 5. Start, limit, fault and completion checks remain.
+`--step` optionally pauses before stages for diagnostics. The earlier separate
+return was physically confirmed; the paired final stage is a new software-tested
+change. The old direct hover return stays disabled.
+`pick_and_place --execute --return-ready` and `full_cycle --execute` use the same
+no-prompt return. The full-cycle block-placement prompt is retained.
+
 ## Copy updates to the Pi
 
-From the repository root, replace `PI_ADDRESS` with the Pi hostname or address:
+Run these commands in Windows PowerShell, replacing `PI_ADDRESS` with the Pi's
+current address. Close other serial clients before running the tests on the Pi.
 
 ```powershell
+Set-Location "C:\Users\heath\OneDrive\Documents\Repos\buck-e-capstone"
+ssh er@PI_ADDRESS 'cd /home/er/buck-e-capstone && mkdir arm-code-backup-20261118 && mv arm/bucke_arm arm/tests arm-code-backup-20261118/'
 scp -r arm er@PI_ADDRESS:/home/er/buck-e-capstone/
 ```
 
-This overwrites matching files without deleting retired files already on the Pi.
+The SSH command preserves the old package and tests outside the active arm
+folder, preventing retired files from being mixed into the new suite. The
+backup name must be unused; choose a new suffix when repeating this procedure.
+Proceed with the copy only if the backup command succeeds. Reports, recordings,
+and local configuration remain in the existing arm folder. Do not run arm
+commands while the transfer is in progress.
+
+On the Pi, verify without motion:
+
+```sh
+cd ~/buck-e-capstone/arm
+python3 -m unittest discover -s tests
+python3 -m bucke_arm.pickup
+```
+
+The current suite has 115 tests. The preview must report the grasp midpoint at
+(7, 2, 0.625) inches. These checks do not execute pickup.

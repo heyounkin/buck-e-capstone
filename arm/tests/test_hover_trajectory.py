@@ -9,11 +9,19 @@ import unittest
 from unittest.mock import Mock, patch
 
 from bucke_arm.arm import FakeArm, RealArm, READY_ANGLES
-from bucke_arm.hover_trajectory import reverse_trace
+from bucke_arm.hover_trajectory import reverse_trace, save_forward_trace
 from bucke_arm.resume_hover import HOVER, main
 
 
 class TrajectoryTests(unittest.TestCase):
+    def test_recording_preserves_faster_return_wrist_speed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch('bucke_arm.hover_trajectory.Path',return_value=Path(folder)):
+                path=save_forward_trace([],False,'test capture',direction='drop_return_stage_2',speed=10)
+            data=json.loads(path.read_text())
+        self.assertEqual(data['speed'],10)
+        self.assertEqual(data['direction'],'drop_return_stage_2')
+
     def trace(self):
         middle = [(a + b) / 2 for a, b in zip(READY_ANGLES, HOVER)]
         return {"schema": 1, "direction": "ready_to_hover", "complete": True,

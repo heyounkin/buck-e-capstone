@@ -11,6 +11,8 @@ from typing import Tuple
 STANDBY_ANGLES = (0, 0, 90, 90, 90, -135)
 READY_ANGLES = (-90, 0, 0, 0, 90, -135)
 POSE_TOLERANCE = 3.0
+# Shared contract for raised-approach arrival and entry into the grasp phase.
+APPROACH_TOLERANCE = 1.5
 POSE_SPEED = 5
 DEFAULT_JOINT_SPEED = 10
 MOVE_TIMEOUT = 120
@@ -225,17 +227,473 @@ class RealArm:
             time.sleep(0.2)
         return reference
 
-    def move_to_hover(self, resume_lift3=False, synchronous=False, continuous=False):
+    def move_to_hover(self, resume_lift3=False, synchronous=False, continuous=None):
+        # Ordinary HOVER is one monitored endpoint command. The fixed historical
+        # recovery and explicitly requested waypoint mode remain separate.
+        if continuous is None:
+            continuous = not (resume_lift3 or synchronous)
         return self._move_hover_route(resume_lift3, synchronous, continuous)
+
+    def _check_stopped_pose(self, expected, tolerance, label):
+        """Require stable, fault-free readings at a fixed diagnostic checkpoint."""
+        reference = None
+        for _ in range(3):
+            self._require_stationary()
+            actual = self.get_angles()
+            if not _matches(actual, expected, tolerance):
+                raise RuntimeError(label + "; read " + repr(actual))
+            if reference is not None and not _matches(actual, reference, 0.25):
+                raise RuntimeError("Diagnostic starting telemetry is unstable")
+            reference = actual if reference is None else reference
+            time.sleep(0.2)
+        return actual
+
+    def _check_raised_approach_start(self):
+        """Require the known stopped diagnostic pose before the small raised test."""
+        from .raised_approach import START_ANGLES, START_TOLERANCE
+        self._check_stopped_pose(START_ANGLES, START_TOLERANCE,
+                                 "Raised approach requires recorded J2-test pose")
+
+    def _sample_local_approach_start(self):
+        """Capture stable stopped telemetry only inside the observed local region."""
+        from .local_approach import known_start, STABILITY_TOLERANCE
+        first = None
+        for _ in range(3):
+            self._require_stationary()
+            actual = self.get_angles()
+            if not known_start(actual):
+                raise RuntimeError("Local approach requires the observed post-alignment region; read " + repr(actual))
+            if first is not None and not _matches(actual,first,STABILITY_TOLERANCE):
+                raise RuntimeError("Local approach start is not stable")
+            first = actual if first is None else first
+            time.sleep(0.2)
+        return actual
+
+    def move_to_local_approach(self):
+        """One measured-reference positioning trial from a checked live start."""
+        live=self._sample_local_approach_start()
+        return self._move_local_approach_from_live(live)
+
+    def _move_local_approach_from_live(self,live):
+        """Execute from a live pose already checked by its owning approach stage."""
+        from .local_approach import STABILITY_TOLERANCE,desired_target,command_target
+        desired,command=desired_target(live),command_target(live)
+        for joint in range(1,7):
+            self._check_target(joint,desired[joint-1])
+            self._check_target(joint,command[joint-1])
+        self._check_stopped_pose(live,STABILITY_TOLERANCE,
+                                 "Local approach start changed during limit checks")
+        print("Checked live start:",live,flush=True)
+        print("Planned J6 (held at captured start):",command[5],flush=True)
+        self._record_forward_hover(command,APPROACH_TOLERANCE,
+                                   direction="measured_hover_to_raised_approach",
+                                   expected_start=live,
+                                   start_tolerance=STABILITY_TOLERANCE,timeout=20,
+                                   arrival_target=desired)
+        return {"start":live,"desired":desired,"command":command,"actual":self.get_angles()}
+
+    def _sample_grasp_start(self):
+        """Require stable readings near the physically verified raised pose."""
+        from .grasp import grasp_start_problem
+        first=None
+        for _ in range(3):
+            self._require_stationary()
+            actual=self.get_angles()
+            problem=grasp_start_problem(actual)
+            if problem is not None:
+                raise RuntimeError("Grasp requires the verified centered raised pose; read "+repr(actual)+"; "+problem)
+            if first is not None and not _matches(actual,first,0.25):
+                raise RuntimeError("Grasp start is not stable")
+            first=actual if first is None else first
+            time.sleep(0.2)
+        return actual
+
+    def grasp_block(self):
+        """One short verified-relative descent followed by jaw closure only."""
+        from .grasp import descent_plan,require_descent_result
+        live=self._sample_grasp_start()
+        desired,command=descent_plan(live)
+        for joint in range(1,7):
+            self._check_target(joint,desired[joint-1])
+            self._check_target(joint,command[joint-1])
+        checked=self._sample_grasp_start()
+        if not _matches(checked,live,0.25):
+            raise RuntimeError("Grasp start changed during limit checks")
+        self._record_forward_hover(command,1.5,direction="raised_approach_to_grasp",
+                                   expected_start=live,start_tolerance=0.25,
+                                   timeout=20,arrival_target=desired)
+        try:
+            self._require_stationary()
+            actual=self.get_angles()
+            require_descent_result(live,actual,desired)
+            self.close_gripper()
+            return {"start":live,"desired":desired,"command":command,"actual":actual}
+        except BaseException:
+            try:
+                self.stop()
+            except Exception:
+                pass
+            raise
+
+    def _sample_return_checkpoint(self, expected=None):
+        """Stable known drop entry or previous completed single-joint endpoint."""
+        from .return_ready import known_drop
+        first=None
+        for _ in range(3):
+            self._require_stationary()
+            actual=self.get_angles()
+            allowed=known_drop(actual) if expected is None else _matches(actual,expected,2.0)
+            if not allowed:
+                raise RuntimeError("Return requires the observed drop/return checkpoint; read "+repr(actual))
+            if first is not None and not _matches(actual,first,.25):
+                raise RuntimeError("Return checkpoint is not stable")
+            first=actual if first is None else first
+            time.sleep(.2)
+        return actual
+
+    def return_to_ready_after_drop(self,confirm_stage=None):
+        """Checked return with automatic progression and paired final J5/J1.
+
+        The operator explicitly removed return confirmations. An optional
+        callback remains for diagnostic --step use; checks and stop behavior
+        are retained for both modes. The old direct hover return stays locked.
+        """
+        if confirm_stage is not None and not callable(confirm_stage):
+            raise ValueError("Return callback must be callable or None")
+        from .return_ready import STAGES,stage_speed,assignments
+        current=self._sample_return_checkpoint()
+        # Check the entire route before its first motion, without changing
+        # power, reference frames, holding mode or jaw position.
+        for _,joint,value in STAGES:
+            for j,v in assignments(joint,value):
+                self._check_target(j,v)
+        self._sample_return_checkpoint()
+        expected=None
+        try:
+            for index,(label,joint,value) in enumerate(STAGES,1):
+                current=self._sample_return_checkpoint(expected)
+                # In the paired final command, reassert existing READY goals
+                # for the other axes. Using measured following-error angles as
+                # new targets could change their holding goals unnecessarily.
+                target=list(current) if isinstance(joint,int) else list(READY_ANGLES)
+                for j,v in assignments(joint,value):
+                    target[j-1]=v
+                target=tuple(target)
+                if confirm_stage is not None and not confirm_stage(index,label,joint,current,target):
+                    raise RuntimeError("Cancelled before return stage %d"%index)
+                final_targets=assignments(joint,value) if isinstance(joint,int) else tuple(enumerate(READY_ANGLES,1))
+                for j,v in final_targets:
+                    self._check_target(j,v)
+                # Recheck after limits and an optional diagnostic pause, then
+                # preserve the stable measured joints outside this stage.
+                live=self._sample_return_checkpoint(expected)
+                target=list(live) if isinstance(joint,int) else list(READY_ANGLES)
+                for j,v in assignments(joint,value):
+                    target[j-1]=v
+                target=tuple(target)
+                self._record_forward_hover(target,2.0,
+                                           direction="drop_return_stage_%d"%index,
+                                           expected_start=live,start_tolerance=.5,
+                                           timeout=25,joint=joint if isinstance(joint,int) else None,
+                                           speed=stage_speed(joint))
+                current=self.get_angles()
+                expected=target
+                print("Return stage %d stopped at:"%index,current,flush=True)
+            self._check_stopped_pose(READY_ANGLES,POSE_TOLERANCE,
+                                     "Final READY not confirmed")
+            return self.get_angles()
+        except BaseException:
+            try:
+                self.stop()
+            except Exception:
+                pass
+            raise
+
+    def run_ready_cycle(self,confirm_pickup,confirm_return=None):
+        """Compose the demonstrated phase motions once from READY and back.
+
+        Block placement is deferred until the raised approach, as in the
+        observed run. No direct low READY-to-grasp shortcut or automatic retry.
+        """
+        if not callable(confirm_pickup):
+            raise RuntimeError("Full hardware cycle requires block-placement confirmation")
+        if confirm_return is not None and not callable(confirm_return):
+            raise ValueError("Return callback must be callable or None")
+        from .full_cycle import POST_HOVER_OBSERVED,POST_HOVER_COMMAND
+        from .resume_hover import HOVER
+        from .local_approach import desired_target,command_target
+        from .grasp import VERIFIED_RAISED_ANGLES,descent_plan
+        from .return_ready import STAGES,assignments
+        self.check_hover_start()
+        # Preflight reference plans for all phases, including return, before
+        # opening jaws. Dynamic live-J6 plans are also checked when calculated.
+        descent_desired,descent_command=descent_plan(VERIFIED_RAISED_ANGLES)
+        for pose in (HOVER,POST_HOVER_COMMAND,POST_HOVER_OBSERVED,
+                     desired_target(),command_target(),descent_desired,descent_command):
+            for joint,angle in enumerate(pose,1):
+                self._check_target(joint,angle)
+        for joint,value in ((2,-10.0),(1,91.0)):
+            self._check_target(joint,value)
+        for _,joint,value in STAGES:
+            for j,v in assignments(joint,value):
+                self._check_target(j,v)
+        self.check_hover_start()
+        try:
+            self.open_gripper()
+            self._wait_for_gripper()
+            print("Phase: single-command high HOVER",flush=True)
+            self.move_to_hover(continuous=True)
+            high=self._check_stopped_pose(HOVER,1.5,"High HOVER checkpoint changed")
+            # Replay the command that produced the measured post-alignment
+            # checkpoint. Keep the current signed wrist angle; never spin it
+            # back to the stale value embedded in the historical snapshot.
+            desired=POST_HOVER_OBSERVED[:5]+(high[5],)
+            command=POST_HOVER_COMMAND[:5]+(high[5],)
+            for joint,angle in enumerate(command,1):
+                self._check_target(joint,angle)
+            self._check_stopped_pose(high,.25,"High HOVER changed before taught transfer")
+            print("Phase: taught high-hover transfer",flush=True)
+            self._record_forward_hover(command,1.0,direction="high_hover_to_taught_checkpoint",
+                                       expected_start=high,start_tolerance=.25,
+                                       timeout=20,arrival_target=desired)
+            post=self._check_stopped_pose(desired,1.0,"Taught transfer checkpoint not confirmed")
+            print("Phase: measured-reference raised approach",flush=True)
+            approach=self._move_local_approach_from_live(post)
+            raised=self._sample_grasp_start()
+            if not confirm_pickup(raised):
+                raise RuntimeError("Cancelled at raised pickup; no descent or closure")
+            print("Phase: grasp, lift and sweep/drop",flush=True)
+            cycle=self.pick_and_place(jaws_already_open=True)
+            print("Phase: staged empty-gripper return",flush=True)
+            ready=self.return_to_ready_after_drop(confirm_return)
+            return {"approach":approach,"cycle":cycle,"ready":ready}
+        except BaseException:
+            try:
+                self.stop()
+            except Exception:
+                pass
+            raise
+
+    def _wait_for_gripper(self, timeout=10, *, allow_contact=False):
+        """Wait for stopped jaws, or stable partial position after loaded closure.
+
+        A held block can prevent fully closed arrival. For closure only, accept
+        valid partial-position telemetry stable within one unit for at least
+        one second, after a two-second minimum, even if moving remains 1.
+        This detects stationary contact, not object identity or holding force.
+        Opening still requires the normal stopped flag; no blind-delay fallback.
+        """
+        started,settled=time.monotonic(),0
+        stable_since=None
+        anchor=None
+        last_moving=last_value=None
+        while time.monotonic()-started<timeout:
+            self._require_stationary()
+            moving=self._client.is_gripper_moving()
+            last_moving=moving
+            if type(moving) is not int or moving not in (0,1):
+                raise RuntimeError("Invalid gripper motion status: "+repr(moving))
+            now=time.monotonic()
+            if allow_contact:
+                value=self._client.get_gripper_value(1)
+                last_value=value
+                if type(value) is not int or not 0<=value<=100:
+                    raise RuntimeError("Invalid adaptive-gripper position: "+repr(value))
+                if anchor is None or abs(value-anchor)>1:
+                    anchor,stable_since=value,now
+                if value>=95:
+                    settled=0  # A closure that remains open must not permit lift.
+                else:
+                    settled=settled+1 if moving==0 else 0
+                contact=(0<value<95 and stable_since is not None and now-stable_since>=1)
+            else:
+                settled=settled+1 if moving==0 else 0
+                contact=False
+            if now-started>=2 and (settled>=3 or contact):
+                if allow_contact:
+                    print("Gripper closure ready: moving=%r, stable position=%r"%(moving,last_value),flush=True)
+                return
+            time.sleep(0.2)
+        raise RuntimeError("Gripper did not settle; no next motion; last moving=%r, value=%r"%(last_moving,last_value))
+
+    def _sample_held_pickup_start(self):
+        """Validate a stopped grasped-block pose without opening or reclosing."""
+        from .pick_and_place import known_held_start
+        first=None
+        for _ in range(3):
+            self._require_stationary()
+            actual=self.get_angles()
+            if not known_held_start(actual):
+                raise RuntimeError("Resume requires the known post-grasp pose; read "+repr(actual))
+            if first is not None and not _matches(actual,first,.25):
+                raise RuntimeError("Post-grasp pose is not stable")
+            first=actual if first is None else first
+            time.sleep(.2)
+        return actual
+
+    def finish_held_pickup(self):
+        """Resume lift/sweep/release from a held grasp; never open before lifting."""
+        from .pick_and_place import LIFT_J2_COMMAND,SWEEP_J1_COMMAND
+        grasped=self._sample_held_pickup_start()
+        self._check_target(2,LIFT_J2_COMMAND)
+        self._check_target(1,SWEEP_J1_COMMAND)
+        self._check_stopped_pose(grasped,.25,"Post-grasp pose changed during limit checks")
+        try:
+            self._wait_for_gripper(allow_contact=True)
+            return self._finish_grasped_cycle(grasped)
+        except BaseException:
+            try:
+                self.stop()
+            except Exception:
+                pass
+            raise
+
+    def pick_and_place(self,*,jaws_already_open=False):
+        """One local grasp, J2-only lift, J1-only sweep and release; no return.
+
+        Only the separate demonstrated phase motions are known from hardware.
+        The single lift replaces two monotonic J2 steps over the same interval;
+        a single sweep replaces the observed monotonic J1 steps. This combined
+        sequence and gripper polling still need a supervised hardware run.
+        """
+        from .pick_and_place import (LIFT_J2_COMMAND,LIFT_J2_OBSERVED,
+                                    SWEEP_J1_COMMAND,SWEEP_J1_OBSERVED)
+        from .grasp import descent_plan
+        from .kinematics import gripper_midpoint_mat
+        start=self._sample_grasp_start()  # Reject drop/ready before opening jaws.
+        desired,command=descent_plan(start)
+        # Preflight every planned joint target before any command, including
+        # future lift/sweep limits. Individual phases recheck before execution.
+        for joint in range(1,7):
+            self._check_target(joint,desired[joint-1])
+            self._check_target(joint,command[joint-1])
+        self._check_target(2,LIFT_J2_COMMAND)
+        self._check_target(1,SWEEP_J1_COMMAND)
+        self._check_stopped_pose(start,0.25,"Pick-and-place starting pose changed")
+        try:
+            if not jaws_already_open:
+                self.open_gripper()
+                self._wait_for_gripper()
+            grasp=self.grasp_block()
+            self._wait_for_gripper(allow_contact=True)  # Wait for stopped/steady loaded closure.
+            at_grasp=grasp['actual']
+            return self._finish_grasped_cycle(at_grasp)
+        except BaseException:
+            try:
+                self.stop()
+            except Exception:
+                pass
+            raise
+
+    def _finish_grasped_cycle(self,at_grasp):
+        """Shared guarded lift/sweep/release after closure or explicit resume."""
+        from .pick_and_place import (LIFT_J2_COMMAND,LIFT_J2_OBSERVED,
+                                    SWEEP_J1_COMMAND,SWEEP_J1_OBSERVED)
+        from .kinematics import gripper_midpoint_mat
+        self._check_stopped_pose(at_grasp,0.5,"Grasp pose changed before lift")
+        self._check_target(2,LIFT_J2_COMMAND)
+        lift_command=list(at_grasp)
+        lift_command[1]=LIFT_J2_COMMAND
+        lift_goal=list(at_grasp)
+        lift_goal[1]=LIFT_J2_OBSERVED
+        self._record_forward_hover(tuple(lift_command),1.5,
+                                   direction="grasp_to_lifted",expected_start=at_grasp,
+                                   start_tolerance=0.5,timeout=20,joint=2,
+                                   arrival_target=tuple(lift_goal))
+        lifted=self.get_angles()
+        rise=(gripper_midpoint_mat(lifted)[2]-gripper_midpoint_mat(at_grasp)[2])/25.4
+        if abs(lifted[1]-LIFT_J2_OBSERVED)>0.4 or rise<0.5:
+            raise RuntimeError("Lift clearance endpoint not confirmed; no sweep or release")
+        self._check_stopped_pose(lifted,0.5,"Lifted pose changed before sweep")
+        self._check_target(1,SWEEP_J1_COMMAND)
+        sweep_command=list(lifted)
+        sweep_command[0]=SWEEP_J1_COMMAND
+        sweep_goal=list(lifted)
+        sweep_goal[0]=SWEEP_J1_OBSERVED
+        self._record_forward_hover(tuple(sweep_command),1.5,
+                                   direction="lifted_to_drop",expected_start=lifted,
+                                   start_tolerance=0.5,timeout=20,joint=1,
+                                   arrival_target=tuple(sweep_goal))
+        self._require_stationary()
+        drop=self.get_angles()
+        height_change=abs(gripper_midpoint_mat(drop)[2]-gripper_midpoint_mat(lifted)[2])/25.4
+        if abs(drop[0]-SWEEP_J1_OBSERVED)>1 or height_change>0.125:
+            raise RuntimeError("Drop endpoint not confirmed; jaws left holding")
+        self.open_gripper()
+        self._wait_for_gripper()
+        return {"grasp":at_grasp,"lifted":lifted,"drop":drop}
+
+    def square_hover(self):
+        """One high-hover alignment test; no automatic trims, descent or grasp."""
+        from .hover_alignment import START_ANGLES, START_TOLERANCE, alignment_target
+        label = "Hover alignment requires the recorded high-hover pose"
+        target = alignment_target()
+        self._check_stopped_pose(START_ANGLES, START_TOLERANCE, label)
+        for joint, angle in enumerate(target, 1):
+            self._check_target(joint, angle)
+        self._check_stopped_pose(START_ANGLES, START_TOLERANCE, label)
+        self._record_forward_hover(target, 1.5, direction="high_hover_alignment",
+                                   expected_start=START_ANGLES,
+                                   start_tolerance=START_TOLERANCE, timeout=20)
+        return self.get_angles()
+
+    def move_to_raised_approach(self):
+        """Raise J2 only from the known pose; never command the wrist or jaws."""
+        from .raised_approach import START_ANGLES, START_TOLERANCE, raised_target
+        target = raised_target()
+        self._check_raised_approach_start()
+        for joint, angle in enumerate(target, 1):
+            self._check_target(joint, angle)
+        self._check_raised_approach_start()
+        # J6 is already aligned near +161 degrees. Never reuse this route from
+        # ready, where J6 is -135 and the previous late rotation occurred.
+        self._record_forward_hover(target, 1.5, direction="stopped_to_raised_approach",
+                                   expected_start=START_ANGLES,
+                                   start_tolerance=START_TOLERANCE, timeout=20, joint=2)
+        return self.get_angles()
+
+    def pick_up_block(self, grasp_height_inches=0.625):
+        """Approach (7, 2) once from ready, then command jaw closure.
+
+        Requires the operator-confirmed clearance and jaws already open. Arrival
+        is checked before closure; no correction, lift or return is attempted.
+        Closure is commanded, not a sensed confirmation that a block is held.
+        """
+        from .pickup import pickup_target, require_grasp_position, require_pickup_execution
+        require_pickup_execution()
+        target = pickup_target(grasp_height_inches)
+        self.check_hover_start()
+        for joint, angle in enumerate(target, 1):
+            self._check_target(joint, angle)
+        self.check_hover_start()  # Recheck after querying live joint limits.
+        try:
+            self._record_forward_hover(target, 1.5, direction="ready_to_pickup")
+            self._require_stationary()
+            actual = self.get_angles()
+            if not _matches(actual, target, 1.5):
+                raise RuntimeError("Pickup endpoint changed before jaw closure")
+            require_grasp_position(actual)
+            self.close_gripper()
+            return actual
+        except BaseException:
+            try:
+                self.stop()
+            except Exception:
+                pass  # Keep the original motion or closure failure visible.
+            raise
 
     def move_from_hover_to_ready(self, synchronous=True, continuous=False):
         raise RuntimeError("Hover return disabled after reported self-contact. "
                            "A measured forward trajectory must be recorded and reviewed first.")
 
-    def _record_forward_hover(self, target, tolerance):
+    def _record_forward_hover(self, target, tolerance, *, direction="ready_to_hover",
+                              expected_start=READY_ANGLES, start_tolerance=POSE_TOLERANCE,
+                              timeout=MOVE_TIMEOUT, joint=None, arrival_target=None, speed=POSE_SPEED):
         """Send one forward command and capture actual motion instead of blocking SDK waits."""
         from .hover_trajectory import save_forward_trace
+        validate_speed(speed)
         samples, complete, failure = [], False, None
+        expected_arrival = target if arrival_target is None else arrival_target
         started = time.monotonic()
 
         def capture():
@@ -247,21 +705,26 @@ class RealArm:
 
         try:
             moving, actual = capture()
-            if moving != 0 or not _matches(actual, READY_ANGLES):
-                raise RuntimeError("Recording must start stationary at saved ready")
-            acknowledgement = self._client.send_angles(list(target), POSE_SPEED)
+            if moving != 0 or not _matches(actual, expected_start, start_tolerance):
+                raise RuntimeError("Recording must start stationary at the required pose")
+            if joint is None:
+                acknowledgement = self._client.send_angles(list(target), speed)
+            else:
+                acknowledgement = self._client.send_angle(joint, target[joint - 1], speed)
             if type(acknowledgement) is not int or acknowledgement != 1:
                 raise RuntimeError("Forward command acknowledgement failed")
             settled = 0
-            while time.monotonic() - started < MOVE_TIMEOUT:
+            while time.monotonic() - started < timeout:
                 time.sleep(0.1)
                 moving, actual = capture()
-                reached = _matches(actual, target, tolerance)
+                reached = _matches(actual, expected_arrival, tolerance)
                 settled = settled + 1 if moving == 0 and reached else 0
                 if settled >= 3:
                     complete = True
                     return True
-            raise RuntimeError("Forward capture timed out before hover was confirmed")
+            errors = tuple(round(a-b,3) for a,b in zip(actual,expected_arrival))
+            raise RuntimeError("Forward capture timed out before target was confirmed; "
+                               "last angles=%r; errors=%r" % (actual,errors))
         except BaseException as exc:
             failure = str(exc) or type(exc).__name__
             try:
@@ -271,15 +734,23 @@ class RealArm:
             raise
         finally:
             try:
-                path = save_forward_trace(samples, complete, failure)
+                options={}
+                if direction!="ready_to_hover":
+                    options['direction']=direction
+                if arrival_target is not None:
+                    options['command_angles']=target
+                    options['arrival_angles']=expected_arrival
+                if speed!=POSE_SPEED:
+                    options['speed']=speed
+                path=save_forward_trace(samples,complete,failure,**options)
                 print("Measured forward recording:", path, flush=True)
             except OSError as exc:
                 if complete:
-                    raise RuntimeError("Hover reached but recording could not be saved: " + str(exc)) from exc
+                    raise RuntimeError("Target reached but recording could not be saved: " + str(exc)) from exc
                 print("Recording could not be saved:", exc, flush=True)
 
     def _move_hover_route(self, resume_lift3, synchronous, continuous):
-        """Replay the supervised approach, then bounded final hover corrections.
+        """Run a monitored direct hover or the explicitly selected historical route.
 
         Requires the original physical setup and a cleared sweep. Joint-space
         waypoints and telemetry checks do not provide collision detection.
@@ -318,7 +789,9 @@ class RealArm:
             raise RuntimeError("Timed out at " + label + "; read " + repr(actual))
 
         self.check_hover_start(resume_lift3=resume_lift3)
-        waypoints = route(resume_lift3=resume_lift3)
+        if continuous and (resume_lift3 or synchronous):
+            raise ValueError("Continuous hover cannot use Lift 3 recovery or synchronous waypoints")
+        waypoints = [("Continuous hover", HOVER, 1.5)] if continuous else route(resume_lift3=resume_lift3)
         # Validate the whole route before sending its first command.
         for joint in range(1, 7):
             values = [target[joint - 1] for _, target, _ in waypoints]
@@ -342,23 +815,8 @@ class RealArm:
                 move(label, target, next_tolerance, expected, tolerance)
                 expected, tolerance = target, next_tolerance
 
-            # Bound the compensation for the observed endpoint error.
-            actual = require_pose(HOVER, 2.0)
-            error = max(abs(a - b) for a, b in zip(actual, HOVER))
-            for attempt in range(1, 3):
-                if error <= 1.5:
-                    break
-                target = tuple(round(goal + max(-0.5, min(0.5, goal - measured)), 2)
-                               if abs(goal - measured) > 1.5 else goal
-                               for goal, measured in zip(HOVER, actual))
-                move(f"Hover trim {attempt}/2", target, 2.0, expected, tolerance)
-                actual = require_pose(HOVER, 2.0)
-                improved = max(abs(a - b) for a, b in zip(actual, HOVER))
-                if improved >= error - 0.05:
-                    raise RuntimeError("Hover trim did not improve joint error")
-                error = improved
-            if error > 1.5:
-                raise RuntimeError("Final hover error exceeds 1.5 degrees")
+            # Observe the final endpoint without issuing corrective movements.
+            actual = require_pose(HOVER, 1.5)
             print("Final angles:", actual, flush=True)
             return True
         except BaseException:
@@ -466,14 +924,124 @@ class FakeArm:
     def move_to_standby(self):
         return self._move_between(READY_ANGLES, STANDBY_ANGLES)
 
-    def move_to_hover(self, resume_lift3=False, synchronous=False, continuous=False):
+    def move_to_hover(self, resume_lift3=False, synchronous=False, continuous=None):
         from .resume_hover import HOVER, LIFT3_READBACK
+        if continuous and (resume_lift3 or synchronous):
+            raise ValueError("Continuous hover cannot use Lift 3 recovery or synchronous waypoints")
         if resume_lift3:
             if any(abs(a - b) > 0.5 for a, b in zip(self._angles, LIFT3_READBACK)):
                 raise RuntimeError("Hover requires recorded Lift 3 checkpoint")
             self._angles = HOVER
             return True
         return self._move_between(READY_ANGLES, HOVER)
+
+    def move_to_local_approach(self):
+        from .local_approach import known_start, desired_target, command_target
+        if not known_start(self._angles):
+            raise RuntimeError("Local approach requires the observed post-alignment region")
+        live=self._angles
+        desired,command=desired_target(live),command_target(live)
+        self._angles=desired
+        return {"start":live,"desired":desired,"command":command,"actual":self._angles}
+
+    def grasp_block(self):
+        from .grasp import known_grasp_start,descent_plan,require_descent_result
+        if not known_grasp_start(self._angles):
+            raise RuntimeError("Grasp requires the verified centered raised pose")
+        live=self._angles
+        desired,command=descent_plan(live)
+        self._angles=desired
+        require_descent_result(live,self._angles,desired)
+        self.close_gripper()
+        return {"start":live,"desired":desired,"command":command,"actual":self._angles}
+
+    def run_ready_cycle(self,confirm_pickup=None,confirm_return=None):
+        """Replay the observed phase checkpoints; not simulated tracking physics."""
+        from .full_cycle import HIGH_HOVER_OBSERVED,POST_HOVER_OBSERVED
+        from .grasp import VERIFIED_RAISED_ANGLES
+        if not _matches(self._angles,READY_ANGLES):
+            raise RuntimeError("Full cycle requires saved READY")
+        self.open_gripper()
+        self._angles=HIGH_HOVER_OBSERVED
+        self._angles=POST_HOVER_OBSERVED
+        # Replay the physically observed raised pose rather than asserting
+        # that the instantaneous fake models the real actuator following error.
+        self._angles=VERIFIED_RAISED_ANGLES
+        if confirm_pickup is not None and not confirm_pickup(self._angles):
+            raise RuntimeError("Cancelled at raised pickup")
+        cycle=self.pick_and_place(jaws_already_open=True)
+        ready=self.return_to_ready_after_drop(confirm_return)
+        return {"approach":{"actual":VERIFIED_RAISED_ANGLES},"cycle":cycle,"ready":ready}
+
+    def return_to_ready_after_drop(self,confirm_stage=None):
+        from .return_ready import known_drop,STAGES,assignments
+        if not known_drop(self._angles):
+            raise RuntimeError("Return requires observed drop pose")
+        for index,(label,joint,value) in enumerate(STAGES,1):
+            target=list(self._angles)
+            for j,v in assignments(joint,value):
+                target[j-1]=v
+            target=tuple(target)
+            if confirm_stage is not None and not confirm_stage(index,label,joint,self._angles,target):
+                raise RuntimeError("Cancelled before return stage %d"%index)
+            self._angles=target
+        return self._angles
+
+    def finish_held_pickup(self):
+        from .pick_and_place import known_held_start,LIFT_J2_OBSERVED,SWEEP_J1_OBSERVED
+        if not known_held_start(self._angles):
+            raise RuntimeError("Resume requires known post-grasp pose")
+        grasp=self._angles
+        lifted=list(grasp)
+        lifted[1]=LIFT_J2_OBSERVED
+        drop=lifted.copy()
+        drop[0]=SWEEP_J1_OBSERVED
+        self._angles=tuple(drop)
+        self.open_gripper()
+        return {"grasp":grasp,"lifted":tuple(lifted),"drop":self._angles}
+
+    def pick_and_place(self,*,jaws_already_open=False):
+        """Nominal instant phase simulation; no load or grasp sensing."""
+        from .grasp import known_grasp_start
+        from .pick_and_place import LIFT_J2_OBSERVED,SWEEP_J1_OBSERVED
+        if not known_grasp_start(self._angles):
+            raise RuntimeError("Pick-and-place requires verified raised pose")
+        if not jaws_already_open:
+            self.open_gripper()
+        grasp=self.grasp_block()['actual']
+        lifted=list(grasp)
+        lifted[1]=LIFT_J2_OBSERVED
+        self._angles=tuple(lifted)
+        drop=lifted.copy()
+        drop[0]=SWEEP_J1_OBSERVED
+        self._angles=tuple(drop)
+        self.open_gripper()
+        return {"grasp":grasp,"lifted":tuple(lifted),"drop":self._angles}
+
+    def square_hover(self):
+        from .hover_alignment import START_ANGLES, START_TOLERANCE, alignment_target
+        if not _matches(self._angles, START_ANGLES, START_TOLERANCE):
+            raise RuntimeError("Hover alignment requires the recorded high-hover pose")
+        self._angles = alignment_target()
+        return self._angles
+
+    def move_to_raised_approach(self):
+        from .raised_approach import START_ANGLES, START_TOLERANCE, raised_target
+        if not _matches(self._angles, START_ANGLES, START_TOLERANCE):
+            raise RuntimeError("Raised approach requires recorded J2-test pose")
+        self._angles = raised_target()
+        return self._angles
+
+    def pick_up_block(self, grasp_height_inches=0.625):
+        """Simulate the same ready-only approach and closure without physics."""
+        from .pickup import pickup_target, require_grasp_position
+        target = pickup_target(grasp_height_inches)
+        if not _matches(self._angles, READY_ANGLES):
+            raise RuntimeError("Pickup requires saved ready")
+        self._angles = target
+        require_grasp_position(self._angles)
+        self.close_gripper()
+        return self._angles
 
     def move_from_hover_to_ready(self, synchronous=True, continuous=False):
         raise RuntimeError("Hover return disabled after reported self-contact")

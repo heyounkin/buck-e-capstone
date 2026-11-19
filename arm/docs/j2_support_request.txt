@@ -1,0 +1,64 @@
+To: support@elephantrobotics.com
+Subject: myCobot 280 Pi J2 stable following error / small-command nonresponse (Atom 7.3, pymycobot 4.0.6)
+
+Hello Elephant Robotics Technical Support,
+
+We need model-specific guidance before adjusting J2 on a myCobot 280 Pi.
+The arm uses pymycobot 4.0.6, Atom firmware 7.3, /dev/ttyAMA0 at 1000000 baud.
+The standard adaptive gripper and Camera Flange 2.0 are installed (published
+combined mass approximately 170 g, excluding extra hardware/cables). There
+was no held block in the J2 tests, cable routing is clear, refresh mode is 1,
+and J2 enabled reads 1. We have made no servo-register, zero-calibration or
+firmware changes.
+
+At SDK speed 10, with the gripper raised clear of the table, single-joint
+commands produced:
+
+Command / reported J2 / reported-minus-requested error (degrees):
++2.00 / +0.61 / -1.39 (from -19.68)
+-19.00 / -19.59 / -0.59 (from +0.61; repeated readings stable)
+-18.40 / -19.59 / -1.19 (no visible or reported movement)
+-17.50 / -19.16 / -1.66 (moved +0.43; subsequent reading stable)
+
+Latest actual J1-J6:
+[36.65, -19.16, -117.59, 44.47, 0.08, 160.75]
+Angle-plan reply:
+[37.28, -17.50, -117.11, 45.68, 0.08, 161.63]
+Raw J2 encoder: 2266.
+Earlier stationary status read moving 0 / error 0 / all servo-status entries 0;
+a contemporaneous full servo-status capture after the latest test was not made.
+
+Raw servo register addresses [7, 21, 22, 23, 24, 26, 27]:
+J1: [0, 15, 20, 0, 0, 3, 3]
+J2: [0, 32, 8, 0, 0, 3, 3]
+J3: [0, 32, 8, 0, 0, 3, 3]
+J4/J5/J6: [0, 25, 25, 0, 0, 3, 3]
+
+The application uses a 3-degree completion tolerance. We understand this can
+accept the above errors; the question is why the joint itself stops short.
+With servos engaged, J2 also has a bounded hand-movable range previously
+reported around -21.26 to -20.74, returning after release. The fingers were
+then touching the table, so this was not an unloaded backlash calibration.
+No uncontrolled sag at rest has been reported. We have stopped pickup testing.
+
+Your 280 Pi hardware troubleshooting page links the PDF "Method of performing
+pid adjustment for robotic arm" and its 20230603 Pi configuration script.
+We inspected it without executing it. It sets addresses
+[13,14,21,22,23,24,26,27] to [90,130,32,8,0,0,1,1] on every joint, using
+legacy MyCobot and baud 115200. The pymycobot v4.0.6 PID example instead uses
+3 at addresses 26/27, matching our current values.
+
+Please advise:
+1. Is this amount and pattern of J2 steady-state reported-angle error expected?
+2. What are the exact definitions/units and correct values for registers 21-24
+   and 26-27 on this unit? Is 3 or 1 appropriate at 26/27 for Atom 7.3?
+3. Is the 20230603 procedure applicable with MyCobot280/pymycobot 4.0.6 and
+   1000000 baud? If a change is justified, can it be confined to J2, and what
+   backup, rollback, supported test pose and acceptance criteria should be used?
+4. If settings are correct, what inspection or read-only current/load diagnostics
+   distinguish joint/coupling play from load-related servo-control behavior?
+
+Please avoid recommending a blanket all-joint reset without confirming this
+unit's configuration. We can supply order/serial details and video if required.
+
+Thank you.

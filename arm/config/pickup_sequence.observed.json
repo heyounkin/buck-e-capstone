@@ -1,0 +1,270 @@
+{
+  "status": "pickup_lift_sweep_and_drop_operator_confirmed",
+  "scope": "Observed local raised approach, short descent/closure, J2 lift, J1 sweep and drop. Not a verified direct ready-to-grasp or automatic return route.",
+  "source": "Operator-pasted motion logs and explicit physical confirmation",
+  "block": {
+    "mat_pickup_xy_inches": [
+      7,
+      2
+    ],
+    "height_inches": 1,
+    "width_description": "slightly over one inch"
+  },
+  "raised_approach_observation_file": "raised_approach.observed.json",
+  "grasp": {
+    "recording_on_pi": "/home/er/buck-e-capstone/arm/hover_trajectories/forward-20261119T034038-546219Z.json",
+    "start_actual_deg": [
+      34.18,
+      -13.97,
+      -108.36,
+      32.95,
+      -0.52,
+      160.22
+    ],
+    "desired_reported_deg": [
+      34.18,
+      -15.9366,
+      -110.2743,
+      36.8308,
+      -0.52,
+      160.22
+    ],
+    "command_deg": [
+      34.18,
+      -15.3466,
+      -109.9063,
+      38.4648,
+      -0.52,
+      160.22
+    ],
+    "end_actual_deg": [
+      34.27,
+      -15.9,
+      -110.39,
+      36.73,
+      -0.35,
+      160.22
+    ],
+    "relative_lowering_inches": 0.25,
+    "jaw_command": {
+      "state": 1,
+      "speed": 20
+    },
+    "physical_result": "Operator confirmed the after photo shows closed jaws; block later lifted and remained between jaws"
+  },
+  "lift": {
+    "joint": 2,
+    "speed": 5,
+    "observed_steps": [
+      {
+        "target_deg": -12,
+        "actual_pose_deg": [
+          34.1,
+          -13.62,
+          -110.39,
+          37.17,
+          -0.52,
+          160.04
+        ],
+        "physical_result": "Block held but one corner barely touching table, or clearance uncertain"
+      },
+      {
+        "target_deg": -10,
+        "actual_pose_deg": [
+          34.18,
+          -11.6,
+          -110.39,
+          37.17,
+          -0.61,
+          160.04
+        ],
+        "physical_result": "Operator explicitly confirmed block fully off the table"
+      }
+    ],
+    "final_actual_deg": [
+      34.18,
+      -11.6,
+      -110.39,
+      37.17,
+      -0.61,
+      160.04
+    ],
+    "nominal_pad_estimate_mat_inches": [
+      7.85,
+      1.99,
+      2.05
+    ],
+    "note": "Pad estimate is model output, not a physical measurement. Two observed J2 steps are preserved; a combined single lift has not been executed."
+  },
+  "drop": {
+    "requested_destination_mat_inches": [
+      2,
+      7
+    ],
+    "observed_landing_mat_inches": [
+      2.5,
+      7
+    ],
+    "executed": true,
+    "joint": 1,
+    "speed": 5,
+    "observed_steps": [
+      {
+        "command_deg": 70,
+        "reported_deg": 69.25,
+        "actual_pose_deg": [
+          69.25,
+          -11.6,
+          -110.39,
+          37.17,
+          -1.14,
+          160.04
+        ]
+      },
+      {
+        "command_deg": 75,
+        "reported_deg": 74.17,
+        "actual_pose_deg": [
+          74.17,
+          -11.6,
+          -110.39,
+          37.17,
+          -1.14,
+          160.04
+        ]
+      },
+      {
+        "command_deg": 90,
+        "reported_deg": 89.03,
+        "actual_pose_deg": [
+          89.03,
+          -11.6,
+          -110.39,
+          37.17,
+          -1.14,
+          160.04
+        ]
+      },
+      {
+        "command_deg": 91,
+        "reported_deg": 90.08,
+        "actual_pose_deg": [
+          90.08,
+          -11.6,
+          -110.39,
+          37.17,
+          -1.14,
+          160.04
+        ]
+      }
+    ],
+    "final_actual_deg": [
+      90.08,
+      -11.6,
+      -110.39,
+      37.17,
+      -1.14,
+      160.04
+    ],
+    "physical_result": "Operator reported block landed about (2.5,7) inches",
+    "release_command_transcript_available": false,
+    "note": "Release/landing is physically reported; the pasted transcript contains joint moves and P, not the O command."
+  },
+  "application": "Observation record only; no automatic route is loaded from this file",
+  "combined_routine": {
+    "module": "bucke_arm.pick_and_place",
+    "hardware_run_observed": false,
+    "start": "Physically verified centered raised pickup pose only",
+    "return_enabled": false
+  },
+  "return": {
+    "destination": "saved READY",
+    "target_deg": [
+      -90,
+      0,
+      0,
+      0,
+      90,
+      -135
+    ],
+    "hardware_run_observed": true,
+    "mode": "automatic progression with checks; optional diagnostic callback only",
+    "planned_joint_order": [
+      2,
+      6,
+      3,
+      4,
+      [
+        5,
+        1
+      ]
+    ],
+    "old_direct_hover_return_enabled": false,
+    "physical_result": "Operator reported the staged return worked perfectly",
+    "observed_stage_speeds": [
+      5,
+      5,
+      5,
+      5,
+      5,
+      5
+    ],
+    "configured_stage_speeds": [
+      5,
+      10,
+      5,
+      5,
+      5
+    ],
+    "updated_j6_speed_hardware_run_observed": false,
+    "operator_reported_updated_sequence_success": true,
+    "paired_finish_hardware_run_observed": false,
+    "confirmation_required": false
+  },
+  "full_cycle": {
+    "module": "bucke_arm.full_cycle",
+    "starts_at": "saved READY",
+    "ends_at": "saved READY",
+    "hardware_run_observed": false,
+    "placement_checkpoint": "No default pause; block pre-positioned at (7,2) before starting",
+    "return_stage_confirmations": false,
+    "automatic_repeat": false,
+    "latest_attempt": {
+      "result": "descent_and_closure_completed_then_gripper_wait_timed_out_before_lift",
+      "grasp_recording_on_pi": "/home/er/buck-e-capstone/arm/hover_trajectories/forward-20261119T042619-908090Z.json",
+      "post_stop_actual_angles_deg": [
+        33.92,
+        -16.08,
+        -110.12,
+        36.56,
+        -0.96,
+        160.57
+      ],
+      "gripper_probe": [
+        {
+          "moving": 0,
+          "value": 54
+        },
+        {
+          "moving": 0,
+          "value": 54
+        },
+        {
+          "moving": 0,
+          "value": 54
+        },
+        {
+          "moving": 0,
+          "value": 54
+        },
+        {
+          "moving": 0,
+          "value": 54
+        }
+      ],
+      "loaded_wait_and_held_resume_hardware_observed": false
+    },
+    "prepositioned_block_approach_hardware_observed": false,
+    "manual_placement_option": "--place-at-pickup"
+  }
+}

@@ -3,7 +3,7 @@
 import argparse
 
 from .arm import (
-    DEFAULT_JOINT_SPEED, FakeArm, MOVE_TIMEOUT, POSE_SPEED, READY_ANGLES, RealArm,
+    DEFAULT_JOINT_SPEED, FakeArm, MOVE_TIMEOUT, POSE_SPEED, POSE_TOLERANCE, READY_ANGLES, RealArm,
     SPEC_LIMITS, STANDBY_ANGLES, validate_speed,
 )
 from .kinematics import gripper_midpoint_mat
@@ -38,7 +38,11 @@ def _move_joint(arm, joint, speed):
         raise ValueError(f"Invalid limits for J{joint}")
 
     print(f"Allowed target range: {low:.1f} to {high:.1f} degrees")
-    target = float(input("Desired angle: "))
+    requested = input("Desired angle (Q cancels): ").strip()
+    if requested.upper() == "Q":
+        print("Joint command cancelled.")
+        return
+    target = float(requested)
     # The range check also rejects NaN and infinite input.
     if not low <= target <= high:
         raise ValueError("Target outside allowed range")
@@ -49,7 +53,16 @@ def _move_joint(arm, joint, speed):
     # The displayed limits are for the operator. The arm rechecks limits and
     # motion status immediately before sending the command.
     print("Waiting for joint to settle...")
-    _print_gripper_xyz(arm.move_joint(joint, target, speed=speed, wait=True))
+    actual = arm.move_joint(joint, target, speed=speed, wait=True)
+    reported = actual[joint - 1]
+    print(f"J{joint} result: requested={target:.2f}, reported={reported:.2f}, "
+          f"error (reported - requested)={reported - target:+.2f} degrees")
+    print(f"Reported change from start: {reported - current:+.2f} degrees")
+    print(f"Completion uses a {POSE_TOLERANCE:.1f}-degree pose tolerance; "
+          "it does not confirm small-angle accuracy.")
+    if abs(reported - current) < 0.1 and abs(target - current) >= 0.1:
+        print("No reported joint movement detected. No retry or compensation was sent.")
+    _print_gripper_xyz(actual)
 
 
 def _move_to_saved_pose(arm, choice):
